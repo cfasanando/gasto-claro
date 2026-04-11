@@ -1,0 +1,49 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Laravel
+gastoclaro-api/vendor/
+gastoclaro-api/node_modules/
+gastoclaro-api/public/build/
+gastoclaro-api/storage/*.key
+gastoclaro-api/storage/logs/*
+gastoclaro-api/storage/framework/cache/*
+gastoclaro-api/storage/framework/sessions/*
+gastoclaro-api/storage/framework/views/*
+gastoclaro-api/bootstrap/cache/*.php
+
+# Laravel local database
+gastoclaro-api/database/*.sqlite
+
+# Flutter / Dart
+gastoclaro_app/.dart_tool/
+gastoclaro_app/.flutter-plugins
+gastoclaro_app/.flutter-plugins-dependencies
+gastoclaro_app/.packages
+gastoclaro_app/build/
+gastoclaro_app/coverage/
+
+# Flutter platform generated
+gastoclaro_app/android/.gradle/
+gastoclaro_app/android/app/debug
+gastoclaro_app/android/app/profile
+gastoclaro_app/android/app/release
+gastoclaro_app/ios/Flutter/Flutter.framework
+gastoclaro_app/ios/Flutter/Flutter.podspec
+gastoclaro_app/ios/Pods/
+gastoclaro_app/ios/.symlinks/
+gastoclaro_app/macos/Pods/
+gastoclaro_app/linux/flutter/ephemeral/
+gastoclaro_app/windows/flutter/ephemeral/
+
+# Optional generated configs
+gastoclaro_app/pubspec.lock
