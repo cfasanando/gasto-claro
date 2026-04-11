@@ -44,6 +44,3 @@ gastoclaro_app/ios/.symlinks/
 gastoclaro_app/macos/Pods/
 gastoclaro_app/linux/flutter/ephemeral/
 gastoclaro_app/windows/flutter/ephemeral/
-
-# Optional generated configs
-gastoclaro_app/pubspec.lock
