@@ -8,6 +8,7 @@ import '../utils/app_formatters.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
+import '../widgets/payment_record_sheet.dart';
 
 class DashboardPage extends StatefulWidget {
   final int year;
@@ -123,147 +124,29 @@ class _DashboardPageState extends State<DashboardPage> {
           content: Text('No se pudo identificar la obligación'),
         ),
       );
+
       return;
     }
 
-    final amountController = TextEditingController(
-      text: amountDue.toStringAsFixed(2),
-    );
-    final noteController = TextEditingController();
-
-    String paymentMethod = 'bank_transfer';
-
-    final confirmed = await showDialog<bool>(
+    final draft = await showPaymentRecordSheet(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Registrar pago'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: amountController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Monto pagado',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: paymentMethod,
-                      decoration: const InputDecoration(
-                        labelText: 'Método de pago',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'cash',
-                          child: Text('Efectivo'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'bank_transfer',
-                          child: Text('Transferencia'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'credit_card',
-                          child: Text('Tarjeta de crédito'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'debit_card',
-                          child: Text('Tarjeta de débito'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'yape',
-                          child: Text('Yape'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'plin',
-                          child: Text('Plin'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'other',
-                          child: Text('Otro'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          paymentMethod = value ?? 'bank_transfer';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: noteController,
-                      decoration: const InputDecoration(
-                        labelText: 'Nota',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Guardar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      title: title,
+      amountDue: amountDue,
+      currency: currency,
     );
 
-    if (confirmed != true) {
-      return;
-    }
-
-    final paidAmount = double.tryParse(amountController.text.trim());
-
-    if (paidAmount == null || paidAmount <= 0) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ingresa un monto válido'),
-        ),
-      );
+    if (draft == null) {
       return;
     }
 
     try {
-      final now = DateTime.now();
-      final paidAt =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
       await paymentRecordService.createPaymentRecord(
         paymentObligationId: obligationId,
-        paidAmount: paidAmount,
-        currency: currency,
-        paidAt: paidAt,
-        paymentMethod: paymentMethod,
-        note: noteController.text.trim().isEmpty
-            ? null
-            : noteController.text.trim(),
+        paidAmount: draft.paidAmount,
+        currency: draft.currency,
+        paidAt: draft.paidAt,
+        paymentMethod: draft.paymentMethod,
+        note: draft.note,
       );
 
       await reload();

@@ -7,6 +7,7 @@ import '../utils/app_formatters.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
+import '../widgets/payment_record_sheet.dart';
 
 class PaymentObligationsPage extends StatefulWidget {
   final int year;
@@ -137,109 +138,25 @@ class _PaymentObligationsPageState extends State<PaymentObligationsPage> {
   }
 
   Future<void> registerPayment(PaymentObligation item) async {
-    final amountController = TextEditingController(
-      text: item.amountDue.toStringAsFixed(2),
-    );
-    String paymentMethod = 'bank_transfer';
-    final noteController = TextEditingController();
-
-    final confirmed = await showDialog<bool>(
+    final draft = await showPaymentRecordSheet(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text('Registrar pago: ${item.title}'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Monto pagado',
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: paymentMethod,
-                      decoration: const InputDecoration(
-                        labelText: 'Método de pago',
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'cash', child: Text('Efectivo')),
-                        DropdownMenuItem(value: 'bank_transfer', child: Text('Transferencia')),
-                        DropdownMenuItem(value: 'credit_card', child: Text('Tarjeta de crédito')),
-                        DropdownMenuItem(value: 'debit_card', child: Text('Tarjeta de débito')),
-                        DropdownMenuItem(value: 'yape', child: Text('Yape')),
-                        DropdownMenuItem(value: 'plin', child: Text('Plin')),
-                        DropdownMenuItem(value: 'other', child: Text('Otro')),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          paymentMethod = value ?? 'bank_transfer';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: noteController,
-                      decoration: const InputDecoration(
-                        labelText: 'Nota',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Guardar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      title: item.title,
+      amountDue: item.amountDue,
+      currency: item.currency,
     );
 
-    if (confirmed != true) {
-      return;
-    }
-
-    final amount = double.tryParse(amountController.text.trim());
-
-    if (amount == null || amount <= 0) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ingresa un monto válido'),
-        ),
-      );
-
+    if (draft == null) {
       return;
     }
 
     try {
-      final now = DateTime.now();
-      final paidAt =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
       await paymentRecordService.createPaymentRecord(
         paymentObligationId: item.id,
-        paidAmount: amount,
-        currency: item.currency,
-        paidAt: paidAt,
-        paymentMethod: paymentMethod,
-        note: noteController.text.trim().isEmpty ? null : noteController.text.trim(),
+        paidAmount: draft.paidAmount,
+        currency: draft.currency,
+        paidAt: draft.paidAt,
+        paymentMethod: draft.paymentMethod,
+        note: draft.note,
       );
 
       await reload();

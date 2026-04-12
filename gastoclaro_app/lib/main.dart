@@ -12,6 +12,7 @@ import 'pages/payment_records_page.dart';
 import 'services/auth_service.dart';
 import 'services/profile_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/month_picker_sheet.dart';
 
 void main() {
   runApp(const GastoClaroApp());
@@ -212,81 +213,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> openMonthPickerDialog() async {
-    int tempYear = year;
-    int tempMonth = month;
+    final currentYear = DateTime.now().year;
 
-    final selected = await showDialog<Map<String, int>>(
+    final selected = await showMonthPickerSheet(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Seleccionar mes'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<int>(
-                    value: tempMonth,
-                    decoration: const InputDecoration(
-                      labelText: 'Mes',
-                    ),
-                    items: List.generate(
-                      12,
-                          (index) => DropdownMenuItem<int>(
-                        value: index + 1,
-                        child: Text(monthNames[index]),
-                      ),
-                    ),
-                    onChanged: (value) {
-                      setDialogState(() {
-                        tempMonth = value ?? tempMonth;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
-                    value: tempYear,
-                    decoration: const InputDecoration(
-                      labelText: 'Año',
-                    ),
-                    items: List.generate(
-                      11,
-                          (index) {
-                        final value = DateTime.now().year - 5 + index;
-
-                        return DropdownMenuItem<int>(
-                          value: value,
-                          child: Text(value.toString()),
-                        );
-                      },
-                    ),
-                    onChanged: (value) {
-                      setDialogState(() {
-                        tempYear = value ?? tempYear;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop({
-                      'year': tempYear,
-                      'month': tempMonth,
-                    });
-                  },
-                  child: const Text('Aplicar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      initialYear: year,
+      initialMonth: month,
+      minYear: currentYear - 3,
+      maxYear: currentYear + 6,
     );
 
     if (selected == null) {
