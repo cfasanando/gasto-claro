@@ -2,9 +2,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../config/api_auth.dart';
 import '../config/api_config.dart';
 import '../models/monthly_dashboard.dart';
+import 'api_headers.dart';
 
 class DashboardService {
   Future<MonthlyDashboard> getMonthlyDashboard({
@@ -17,10 +17,7 @@ class DashboardService {
 
     final response = await http.get(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-      },
+      headers: await ApiHeaders.auth(),
     );
 
     if (response.statusCode != 200) {

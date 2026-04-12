@@ -2,9 +2,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../config/api_auth.dart';
 import '../config/api_config.dart';
 import '../models/fixed_expense.dart';
+import 'api_headers.dart';
 
 class FixedExpenseService {
   Future<List<FixedExpense>> getFixedExpenses() async {
@@ -12,10 +12,7 @@ class FixedExpenseService {
 
     final response = await http.get(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-      },
+      headers: await ApiHeaders.auth(),
     );
 
     if (response.statusCode != 200) {
@@ -48,11 +45,7 @@ class FixedExpenseService {
 
     final response = await http.post(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-        'Content-Type': 'application/json',
-      },
+      headers: await ApiHeaders.auth(includeJsonContentType: true),
       body: jsonEncode({
         'name': name,
         'category': category,
@@ -91,11 +84,7 @@ class FixedExpenseService {
 
     final response = await http.put(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-        'Content-Type': 'application/json',
-      },
+      headers: await ApiHeaders.auth(includeJsonContentType: true),
       body: jsonEncode({
         'name': name,
         'category': category,
@@ -123,10 +112,7 @@ class FixedExpenseService {
 
     final response = await http.delete(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-      },
+      headers: await ApiHeaders.auth(),
     );
 
     if (response.statusCode != 200) {

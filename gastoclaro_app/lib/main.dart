@@ -5,8 +5,10 @@ import 'pages/debts_page.dart';
 import 'pages/fixed_expenses_page.dart';
 import 'pages/income_events_page.dart';
 import 'pages/income_sources_page.dart';
+import 'pages/login_page.dart';
 import 'pages/payment_obligations_page.dart';
 import 'pages/payment_records_page.dart';
+import 'services/auth_service.dart';
 
 void main() {
   runApp(const GastoClaroApp());
@@ -23,13 +25,88 @@ class GastoClaroApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
       ),
-      home: const HomePage(),
+      home: const SessionGate(),
+    );
+  }
+}
+
+class SessionGate extends StatefulWidget {
+  const SessionGate({super.key});
+
+  @override
+  State<SessionGate> createState() => _SessionGateState();
+}
+
+class _SessionGateState extends State<SessionGate> {
+  final AuthService authService = AuthService();
+  late Future<bool> futureSession;
+
+  @override
+  void initState() {
+    super.initState();
+    loadSession();
+  }
+
+  void loadSession() {
+    futureSession = authService.restoreSession();
+  }
+
+  Future<void> refreshSession() async {
+    setState(() {
+      loadSession();
+    });
+  }
+
+  Future<void> handleLogout() async {
+    await authService.logout();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      loadSession();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: futureSession,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        final isAuthenticated = snapshot.data == true;
+
+        if (!isAuthenticated) {
+          return LoginPage(
+            onLoginSuccess: () {
+              refreshSession();
+            },
+          );
+        }
+
+        return HomePage(
+          onLogout: handleLogout,
+        );
+      },
     );
   }
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final Future<void> Function() onLogout;
+
+  const HomePage({
+    super.key,
+    required this.onLogout,
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -217,46 +294,67 @@ class _HomePageState extends State<HomePage> {
       'Deudas',
       'Gastos fijos',
       'Ingresos',
-      'Eventos de ingreso',
+      'Eventos',
     ];
 
     return Scaffold(
       appBar: AppBar(
         title: Text(titles[currentIndex]),
-        actions: pageUsesMonth
-            ? [
-          IconButton(
-            onPressed: goToPreviousMonth,
-            icon: const Icon(Icons.chevron_left),
-            tooltip: 'Mes anterior',
-          ),
-          Center(
-            child: InkWell(
-              onTap: openMonthPickerDialog,
-              borderRadius: BorderRadius.circular(20),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text(
-                  currentMonthLabel,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
+        actions: [
+          if (pageUsesMonth) ...[
+            IconButton(
+              onPressed: goToPreviousMonth,
+              icon: const Icon(Icons.chevron_left),
+              tooltip: 'Mes anterior',
+            ),
+            Center(
+              child: InkWell(
+                onTap: openMonthPickerDialog,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    currentMonthLabel,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
             ),
+            IconButton(
+              onPressed: openMonthPickerDialog,
+              icon: const Icon(Icons.calendar_month_outlined),
+              tooltip: 'Elegir mes',
+            ),
+            IconButton(
+              onPressed: goToNextMonth,
+              icon: const Icon(Icons.chevron_right),
+              tooltip: 'Mes siguiente',
+            ),
+          ],
+          PopupMenuButton<String>(
+            tooltip: 'Cuenta',
+            onSelected: (value) async {
+              if (value == 'logout') {
+                await widget.onLogout();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, size: 18),
+                    SizedBox(width: 8),
+                    Text('Cerrar sesión'),
+                  ],
+                ),
+              ),
+            ],
+            icon: const Icon(Icons.account_circle_outlined),
           ),
-          IconButton(
-            onPressed: openMonthPickerDialog,
-            icon: const Icon(Icons.calendar_month_outlined),
-            tooltip: 'Elegir mes',
-          ),
-          IconButton(
-            onPressed: goToNextMonth,
-            icon: const Icon(Icons.chevron_right),
-            tooltip: 'Mes siguiente',
-          ),
-        ]
-            : null,
+        ],
       ),
       body: IndexedStack(
         index: currentIndex,

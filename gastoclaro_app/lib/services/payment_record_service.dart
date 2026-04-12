@@ -2,9 +2,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../config/api_auth.dart';
 import '../config/api_config.dart';
 import '../models/payment_record.dart';
+import 'api_headers.dart';
 
 class PaymentRecordService {
   Future<List<PaymentRecord>> getMonthlyRecords({
@@ -17,10 +17,7 @@ class PaymentRecordService {
 
     final response = await http.get(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-      },
+      headers: await ApiHeaders.auth(),
     );
 
     if (response.statusCode != 200) {
@@ -50,11 +47,7 @@ class PaymentRecordService {
 
     final response = await http.post(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-        'Content-Type': 'application/json',
-      },
+      headers: await ApiHeaders.auth(includeJsonContentType: true),
       body: jsonEncode({
         'payment_obligation_id': paymentObligationId,
         'paid_amount': paidAmount,

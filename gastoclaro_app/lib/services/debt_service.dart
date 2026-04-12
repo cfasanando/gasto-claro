@@ -2,9 +2,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../config/api_auth.dart';
 import '../config/api_config.dart';
 import '../models/debt.dart';
+import 'api_headers.dart';
 
 class DebtService {
   Future<List<Debt>> getDebts() async {
@@ -12,10 +12,7 @@ class DebtService {
 
     final response = await http.get(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-      },
+      headers: await ApiHeaders.auth(),
     );
 
     if (response.statusCode != 200) {
@@ -52,11 +49,7 @@ class DebtService {
 
     final response = await http.post(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-        'Content-Type': 'application/json',
-      },
+      headers: await ApiHeaders.auth(includeJsonContentType: true),
       body: jsonEncode({
         'debt_type': debtType,
         'name': name,
@@ -103,11 +96,7 @@ class DebtService {
 
     final response = await http.put(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-        'Content-Type': 'application/json',
-      },
+      headers: await ApiHeaders.auth(includeJsonContentType: true),
       body: jsonEncode({
         'debt_type': debtType,
         'name': name,
@@ -139,10 +128,7 @@ class DebtService {
 
     final response = await http.delete(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-      },
+      headers: await ApiHeaders.auth(),
     );
 
     if (response.statusCode != 200) {

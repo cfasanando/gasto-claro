@@ -2,9 +2,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../config/api_auth.dart';
 import '../config/api_config.dart';
 import '../models/income_source.dart';
+import 'api_headers.dart';
 
 class IncomeSourceService {
   Future<List<IncomeSource>> getIncomeSources() async {
@@ -12,10 +12,7 @@ class IncomeSourceService {
 
     final response = await http.get(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-      },
+      headers: await ApiHeaders.auth(),
     );
 
     if (response.statusCode != 200) {
@@ -45,11 +42,7 @@ class IncomeSourceService {
 
     final response = await http.post(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-        'Content-Type': 'application/json',
-      },
+      headers: await ApiHeaders.auth(includeJsonContentType: true),
       body: jsonEncode({
         'name': name,
         'type': type,
@@ -82,11 +75,7 @@ class IncomeSourceService {
 
     final response = await http.put(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-        'Content-Type': 'application/json',
-      },
+      headers: await ApiHeaders.auth(includeJsonContentType: true),
       body: jsonEncode({
         'name': name,
         'type': type,
@@ -111,10 +100,7 @@ class IncomeSourceService {
 
     final response = await http.delete(
       uri,
-      headers: const {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
-      },
+      headers: await ApiHeaders.auth(),
     );
 
     if (response.statusCode != 200) {
