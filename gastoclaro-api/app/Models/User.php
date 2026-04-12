@@ -11,6 +11,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\FixedExpense;
 use App\Models\IncomeSource;
+use App\Models\IncomeEvent;
 
 class User extends Authenticatable
 {
@@ -48,5 +49,10 @@ class User extends Authenticatable
     public function incomeSources(): HasMany
     {
         return $this->hasMany(IncomeSource::class);
+    }
+
+    public function incomeEvents(): HasMany
+    {
+        return $this->hasMany(IncomeEvent::class);
     }
 }

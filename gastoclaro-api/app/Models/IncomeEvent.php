@@ -6,25 +6,27 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class IncomeSource extends Model
+class IncomeEvent extends Model
 {
     protected $fillable = [
         'user_id',
-        'name',
-        'type',
-        'default_amount',
+        'income_source_id',
+        'title',
+        'amount',
         'currency',
-        'is_active',
+        'expected_date',
+        'received_date',
+        'status',
         'notes',
     ];
 
     protected function casts(): array
     {
         return [
-            'default_amount' => 'decimal:2',
-            'is_active' => 'boolean',
+            'amount' => 'decimal:2',
+            'expected_date' => 'date',
+            'received_date' => 'date',
         ];
     }
 
@@ -33,8 +35,8 @@ class IncomeSource extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function incomeEvents(): HasMany
+    public function incomeSource(): BelongsTo
     {
-        return $this->hasMany(IncomeEvent::class);
+        return $this->belongsTo(IncomeSource::class);
     }
 }
