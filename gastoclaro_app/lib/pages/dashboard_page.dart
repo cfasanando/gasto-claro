@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/monthly_dashboard.dart';
 import '../services/dashboard_service.dart';
 import '../services/payment_obligation_service.dart';
+import '../services/payment_record_service.dart';
 import '../utils/app_formatters.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -30,6 +31,7 @@ class _DashboardPageState extends State<DashboardPage> {
   final DashboardService dashboardService = DashboardService();
   final PaymentObligationService paymentObligationService =
   PaymentObligationService();
+  final PaymentRecordService paymentRecordService = PaymentRecordService();
 
   bool isSyncing = false;
 
@@ -103,6 +105,185 @@ class _DashboardPageState extends State<DashboardPage> {
           isSyncing = false;
         });
       }
+    }
+  }
+
+  Future<void> registerPaymentFromDashboard(Map<String, dynamic> item) async {
+    final obligationId = item['id'] as int?;
+    final amountDue = ((item['amount_due'] as num?) ?? 0).toDouble();
+    final currency = item['currency']?.toString() ?? 'PEN';
+    final title = item['title']?.toString() ?? 'Obligación';
+
+    if (obligationId == null || obligationId <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo identificar la obligación'),
+        ),
+      );
+      return;
+    }
+
+    final amountController = TextEditingController(
+      text: amountDue.toStringAsFixed(2),
+    );
+    final noteController = TextEditingController();
+
+    String paymentMethod = 'bank_transfer';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Registrar pago'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: amountController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Monto pagado',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: paymentMethod,
+                      decoration: const InputDecoration(
+                        labelText: 'Método de pago',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'cash',
+                          child: Text('Efectivo'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'bank_transfer',
+                          child: Text('Transferencia'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'credit_card',
+                          child: Text('Tarjeta de crédito'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'debit_card',
+                          child: Text('Tarjeta de débito'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'yape',
+                          child: Text('Yape'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'plin',
+                          child: Text('Plin'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'other',
+                          child: Text('Otro'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setDialogState(() {
+                          paymentMethod = value ?? 'bank_transfer';
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: noteController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nota',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final paidAmount = double.tryParse(amountController.text.trim());
+
+    if (paidAmount == null || paidAmount <= 0) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ingresa un monto válido'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final now = DateTime.now();
+      final paidAt =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      await paymentRecordService.createPaymentRecord(
+        paymentObligationId: obligationId,
+        paidAmount: paidAmount,
+        currency: currency,
+        paidAt: paidAt,
+        paymentMethod: paymentMethod,
+        note: noteController.text.trim().isEmpty
+            ? null
+            : noteController.text.trim(),
+      );
+
+      await reload();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pago registrado correctamente'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo registrar el pago: $e'),
+        ),
+      );
     }
   }
 
@@ -278,7 +459,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 const Text('No hay elementos en atención.')
               else
                 ...dashboard.attentionItems.map(
-                      (item) => _DashboardItemCard(item: item),
+                      (item) => _DashboardItemCard(
+                    item: item,
+                    showPayAction: true,
+                    onPay: () => registerPaymentFromDashboard(item),
+                  ),
                 ),
               const SizedBox(height: 24),
               _SectionTitle(
@@ -290,7 +475,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 const Text('No hay elementos pendientes.')
               else
                 ...dashboard.pendingItems.map(
-                      (item) => _DashboardItemCard(item: item),
+                      (item) => _DashboardItemCard(
+                    item: item,
+                    showPayAction: true,
+                    onPay: () => registerPaymentFromDashboard(item),
+                  ),
                 ),
               const SizedBox(height: 24),
               _SectionTitle(
@@ -302,7 +491,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 const Text('No hay elementos pagados.')
               else
                 ...dashboard.paidItems.map(
-                      (item) => _DashboardItemCard(item: item),
+                      (item) => _DashboardItemCard(
+                    item: item,
+                    showPayAction: false,
+                  ),
                 ),
               const SizedBox(height: 24),
               Card(
@@ -393,9 +585,13 @@ class _SectionTitle extends StatelessWidget {
 
 class _DashboardItemCard extends StatelessWidget {
   final Map<String, dynamic> item;
+  final bool showPayAction;
+  final VoidCallback? onPay;
 
   const _DashboardItemCard({
     required this.item,
+    required this.showPayAction,
+    this.onPay,
   });
 
   Color _statusColor(String status) {
@@ -419,36 +615,68 @@ class _DashboardItemCard extends StatelessWidget {
     final color = _statusColor(status);
 
     return Card(
-      child: ListTile(
-        title: Text(item['title']?.toString() ?? ''),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
           children: [
-            const SizedBox(height: 4),
-            Text('Vence: ${AppFormatters.date(item['due_date'])}'),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                color: color.withValues(alpha: 0.12),
-              ),
-              child: Text(
-                AppFormatters.obligationStatus(status),
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w600,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['title']?.toString() ?? '',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text('Vence: ${AppFormatters.date(item['due_date'])}'),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          color: color.withValues(alpha: 0.12),
+                        ),
+                        child: Text(
+                          AppFormatters.obligationStatus(status),
+                          style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  AppFormatters.money(
+                    (item['amount_due'] as num?) ?? 0,
+                    item['currency']?.toString() ?? 'PEN',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            if (showPayAction) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: onPay,
+                  icon: const Icon(Icons.payments_outlined),
+                  label: const Text('Pagar'),
                 ),
               ),
-            ),
+            ],
           ],
-        ),
-        trailing: Text(
-          AppFormatters.money(
-            (item['amount_due'] as num?) ?? 0,
-            item['currency']?.toString() ?? 'PEN',
-          ),
-          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
     );
