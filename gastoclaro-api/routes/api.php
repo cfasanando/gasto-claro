@@ -1,6 +1,9 @@
 <?php
 
-use Illuminate\Http\Request;
+declare(strict_types=1);
+
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DebtController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/ping', function () {
@@ -10,6 +13,12 @@ Route::get('/ping', function () {
     ]);
 });
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/me', [AuthController::class, 'me']);
+    Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::apiResource('debts', DebtController::class);
 });
