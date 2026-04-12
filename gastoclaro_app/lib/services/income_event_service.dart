@@ -77,4 +77,65 @@ class IncomeEventService {
       );
     }
   }
+
+  Future<void> updateIncomeEvent({
+    required int id,
+    int? incomeSourceId,
+    required String title,
+    required double amount,
+    required String currency,
+    required String expectedDate,
+    String? receivedDate,
+    required String status,
+    String? notes,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/income-events/$id');
+
+    final response = await http.put(
+      uri,
+      headers: const {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'income_source_id': incomeSourceId,
+        'title': title,
+        'amount': amount,
+        'currency': currency,
+        'expected_date': expectedDate,
+        'received_date': receivedDate,
+        'status': status,
+        'notes': notes,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to update income event. '
+            'Status: ${response.statusCode}. '
+            'Body: ${response.body}',
+      );
+    }
+  }
+
+  Future<void> deleteIncomeEvent(int id) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/income-events/$id');
+
+    final response = await http.delete(
+      uri,
+      headers: const {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to delete income event. '
+            'Status: ${response.statusCode}. '
+            'Body: ${response.body}',
+      );
+    }
+  }
 }

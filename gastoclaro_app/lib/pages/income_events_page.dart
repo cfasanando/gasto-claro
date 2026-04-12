@@ -87,17 +87,37 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
   }
 
   Future<void> openCreateIncomeEventDialog() async {
-    final titleController = TextEditingController();
-    final amountController = TextEditingController();
-    final expectedDateController = TextEditingController(
-      text: defaultExpectedDate(),
-    );
-    final receivedDateController = TextEditingController();
-    final notesController = TextEditingController();
+    await openIncomeEventDialog();
+  }
 
-    String currency = 'PEN';
-    String status = 'planned';
-    int? selectedIncomeSourceId;
+  Future<void> openEditIncomeEventDialog(IncomeEvent event) async {
+    await openIncomeEventDialog(existingEvent: event);
+  }
+
+  Future<void> openIncomeEventDialog({IncomeEvent? existingEvent}) async {
+    final titleController = TextEditingController(
+      text: existingEvent?.title ?? '',
+    );
+    final amountController = TextEditingController(
+      text: existingEvent?.amount.toStringAsFixed(2) ?? '',
+    );
+    final expectedDateController = TextEditingController(
+      text: existingEvent != null
+          ? formatDate(existingEvent.expectedDate)
+          : defaultExpectedDate(),
+    );
+    final receivedDateController = TextEditingController(
+      text: existingEvent?.receivedDate != null
+          ? formatDate(existingEvent!.receivedDate)
+          : '',
+    );
+    final notesController = TextEditingController(
+      text: existingEvent?.notes ?? '',
+    );
+
+    String currency = existingEvent?.currency ?? 'PEN';
+    String status = existingEvent?.status ?? 'planned';
+    int? selectedIncomeSourceId = existingEvent?.incomeSourceId;
 
     List<IncomeSource> sources = [];
 
@@ -115,7 +135,11 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Nuevo evento de ingreso'),
+              title: Text(
+                existingEvent == null
+                    ? 'Nuevo evento de ingreso'
+                    : 'Editar evento de ingreso',
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -154,7 +178,9 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
                         labelText: 'Monto',
                       ),
@@ -265,20 +291,38 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
     }
 
     try {
-      await incomeEventService.createIncomeEvent(
-        incomeSourceId: selectedIncomeSourceId,
-        title: titleController.text.trim(),
-        amount: amount,
-        currency: currency,
-        expectedDate: expectedDateController.text.trim(),
-        receivedDate: receivedDateController.text.trim().isEmpty
-            ? null
-            : receivedDateController.text.trim(),
-        status: status,
-        notes: notesController.text.trim().isEmpty
-            ? null
-            : notesController.text.trim(),
-      );
+      if (existingEvent == null) {
+        await incomeEventService.createIncomeEvent(
+          incomeSourceId: selectedIncomeSourceId,
+          title: titleController.text.trim(),
+          amount: amount,
+          currency: currency,
+          expectedDate: expectedDateController.text.trim(),
+          receivedDate: receivedDateController.text.trim().isEmpty
+              ? null
+              : receivedDateController.text.trim(),
+          status: status,
+          notes: notesController.text.trim().isEmpty
+              ? null
+              : notesController.text.trim(),
+        );
+      } else {
+        await incomeEventService.updateIncomeEvent(
+          id: existingEvent.id,
+          incomeSourceId: selectedIncomeSourceId,
+          title: titleController.text.trim(),
+          amount: amount,
+          currency: currency,
+          expectedDate: expectedDateController.text.trim(),
+          receivedDate: receivedDateController.text.trim().isEmpty
+              ? null
+              : receivedDateController.text.trim(),
+          status: status,
+          notes: notesController.text.trim().isEmpty
+              ? null
+              : notesController.text.trim(),
+        );
+      }
 
       await reload();
 
@@ -287,8 +331,12 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Evento de ingreso creado correctamente'),
+        SnackBar(
+          content: Text(
+            existingEvent == null
+                ? 'Evento de ingreso creado correctamente'
+                : 'Evento de ingreso actualizado correctamente',
+          ),
         ),
       );
     } catch (e) {
@@ -298,7 +346,62 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo crear el evento de ingreso: $e'),
+          content: Text(
+            existingEvent == null
+                ? 'No se pudo crear el evento de ingreso: $e'
+                : 'No se pudo actualizar el evento de ingreso: $e',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> confirmDeleteIncomeEvent(IncomeEvent event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Eliminar evento de ingreso'),
+          content: Text('¿Deseas eliminar "${event.title}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await incomeEventService.deleteIncomeEvent(event.id);
+      await reload();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Evento de ingreso eliminado correctamente'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo eliminar el evento de ingreso: $e'),
         ),
       );
     }
@@ -383,19 +486,60 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
                             'Esperado: ${formatDate(item.expectedDate)}\n'
                             'Estado: ${translateStatus(item.status)}',
                       ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            formatMoney(item.amount, item.currency),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                formatMoney(item.amount, item.currency),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (item.receivedDate != null)
+                                Text(
+                                  'Recibido: ${formatDate(item.receivedDate)}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                            ],
                           ),
-                          if (item.receivedDate != null)
-                            Text(
-                              'Recibido: ${formatDate(item.receivedDate)}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
+                          const SizedBox(width: 8),
+                          PopupMenuButton<String>(
+                            tooltip: 'Acciones',
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                openEditIncomeEventDialog(item);
+                              } else if (value == 'delete') {
+                                confirmDeleteIncomeEvent(item);
+                              }
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Editar'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Eliminar'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            icon: const Icon(Icons.more_vert),
+                          ),
                         ],
                       ),
                     ),
