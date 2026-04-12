@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Services\MonthlyDashboardService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class DashboardController extends Controller
+{
+    public function __construct(
+        private readonly MonthlyDashboardService $monthlyDashboardService,
+    ) {}
+
+    public function monthly(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'month' => ['nullable', 'integer', 'between:1,12'],
+        ]);
+
+        $year = (int) ($validated['year'] ?? now()->year);
+        $month = (int) ($validated['month'] ?? now()->month);
+
+        return response()->json(
+            $this->monthlyDashboardService->build($request->user(), $year, $month)
+        );
+    }
+}

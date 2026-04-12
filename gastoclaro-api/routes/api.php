@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\DebtController;
 use App\Http\Controllers\Api\FixedExpenseController;
 use App\Http\Controllers\Api\IncomeSourceController;
 use App\Http\Controllers\Api\IncomeEventController;
+use App\Http\Controllers\Api\DashboardController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/ping', function () {
@@ -16,6 +17,7 @@ Route::get('/ping', function () {
     ]);
 });
 
+Route::get('/dashboard/monthly', [DashboardController::class, 'monthly']);
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::apiResource('fixed-expenses', FixedExpenseController::class);
@@ -25,6 +27,8 @@ Route::apiResource('income-events', IncomeEventController::class);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::get('/dashboard/monthly', [DashboardController::class, 'monthly']);
 
     Route::apiResource('debts', DebtController::class);
     Route::apiResource('fixed-expenses', FixedExpenseController::class);
