@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/app_user.dart';
+import '../utils/api_error_parser.dart';
 import 'api_headers.dart';
 
 class ProfileService {
@@ -16,10 +17,10 @@ class ProfileService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to load profile. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo cargar el perfil',
       );
     }
 

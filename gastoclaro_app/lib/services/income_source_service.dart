@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/income_source.dart';
+import '../utils/api_error_parser.dart';
 import 'api_headers.dart';
 
 class IncomeSourceService {
@@ -16,10 +17,10 @@ class IncomeSourceService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to load income sources. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudieron cargar las fuentes de ingreso',
       );
     }
 
@@ -54,10 +55,10 @@ class IncomeSourceService {
     );
 
     if (response.statusCode != 201) {
-      throw Exception(
-        'Failed to create income source. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo crear la fuente de ingreso',
       );
     }
   }
@@ -87,10 +88,10 @@ class IncomeSourceService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to update income source. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo actualizar la fuente de ingreso',
       );
     }
   }
@@ -104,10 +105,10 @@ class IncomeSourceService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to delete income source. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo eliminar la fuente de ingreso',
       );
     }
   }

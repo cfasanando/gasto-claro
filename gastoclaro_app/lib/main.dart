@@ -11,6 +11,7 @@ import 'pages/payment_obligations_page.dart';
 import 'pages/payment_records_page.dart';
 import 'services/auth_service.dart';
 import 'services/profile_service.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   runApp(const GastoClaroApp());
@@ -24,9 +25,7 @@ class GastoClaroApp extends StatelessWidget {
     return MaterialApp(
       title: 'GastoClaro',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-      ),
+      theme: AppTheme.light(),
       home: const SessionGate(),
     );
   }
@@ -339,20 +338,66 @@ class _HomePageState extends State<HomePage> {
     ];
 
     final titles = [
-      'Panel mensual',
+      'Resumen',
       'Obligaciones',
       'Pagos',
       'Deudas',
-      'Gastos fijos',
+      'Gastos',
       'Ingresos',
       'Eventos',
     ];
 
-    final wideScreen = MediaQuery.of(context).size.width >= 950;
+    final width = MediaQuery.of(context).size.width;
+    final useRail = width >= 1080;
+
+    final destinations = const [
+      _AppDestination(
+        label: 'Panel',
+        icon: Icons.dashboard_outlined,
+        selectedIcon: Icons.dashboard_rounded,
+      ),
+      _AppDestination(
+        label: 'Obligaciones',
+        icon: Icons.receipt_long_outlined,
+        selectedIcon: Icons.receipt_long,
+      ),
+      _AppDestination(
+        label: 'Pagos',
+        icon: Icons.payments_outlined,
+        selectedIcon: Icons.payments,
+      ),
+      _AppDestination(
+        label: 'Deudas',
+        icon: Icons.account_balance_wallet_outlined,
+        selectedIcon: Icons.account_balance_wallet,
+      ),
+      _AppDestination(
+        label: 'Gastos',
+        icon: Icons.home_work_outlined,
+        selectedIcon: Icons.home_work,
+      ),
+      _AppDestination(
+        label: 'Ingresos',
+        icon: Icons.attach_money_outlined,
+        selectedIcon: Icons.attach_money,
+      ),
+      _AppDestination(
+        label: 'Eventos',
+        icon: Icons.event_note_outlined,
+        selectedIcon: Icons.event_note,
+      ),
+    ];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(titles[currentIndex]),
+        title: Text(
+          titles[currentIndex],
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.4,
+          ),
+        ),
         actions: [
           if (pageUsesMonth) ...[
             IconButton(
@@ -363,28 +408,33 @@ class _HomePageState extends State<HomePage> {
             Center(
               child: InkWell(
                 onTap: openMonthPickerDialog,
-                borderRadius: BorderRadius.circular(20),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                   child: Text(
                     currentMonthLabel,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
               ),
             ),
             IconButton(
-              onPressed: openMonthPickerDialog,
-              icon: const Icon(Icons.calendar_month_outlined),
-              tooltip: 'Elegir mes',
-            ),
-            IconButton(
               onPressed: goToNextMonth,
               icon: const Icon(Icons.chevron_right),
               tooltip: 'Mes siguiente',
             ),
+            const SizedBox(width: 6),
           ],
           PopupMenuButton<String>(
             tooltip: currentUser?.email.isNotEmpty == true
@@ -410,7 +460,7 @@ class _HomePageState extends State<HomePage> {
                             ? currentUser!.name
                             : 'Usuario',
                         style: const TextStyle(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -454,16 +504,26 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.only(left: 8, right: 14),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   CircleAvatar(
-                    radius: 16,
-                    child: Text(userInitial),
+                    radius: 18,
+                    backgroundColor: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.12),
+                    child: Text(
+                      userInitial,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
-                  if (wideScreen) ...[
-                    const SizedBox(width: 8),
+                  if (useRail) ...[
+                    const SizedBox(width: 10),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 120),
                       child: Text(
@@ -472,7 +532,7 @@ class _HomePageState extends State<HomePage> {
                             : 'Cuenta',
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -483,49 +543,110 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: currentIndex,
-        children: pages,
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: (value) {
-          setState(() {
-            currentIndex = value;
-          });
-        },
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            label: 'Panel',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long_outlined),
-            label: 'Obligaciones',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.payments_outlined),
-            label: 'Pagos',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            label: 'Deudas',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_work_outlined),
-            label: 'Gastos',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.attach_money_outlined),
-            label: 'Ingresos',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.event_note_outlined),
-            label: 'Eventos',
+      body: Row(
+        children: [
+          if (useRail)
+            Container(
+              width: 100,
+              margin: const EdgeInsets.fromLTRB(16, 8, 0, 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(
+                  color: Theme.of(context).dividerColor,
+                ),
+              ),
+              child: NavigationRail(
+                selectedIndex: currentIndex,
+                onDestinationSelected: openTab,
+                labelType: NavigationRailLabelType.all,
+                useIndicator: true,
+                leading: Padding(
+                  padding: const EdgeInsets.only(top: 10, bottom: 12),
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF4F46E5),
+                          Color(0xFF14B8A6),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Icon(
+                      Icons.auto_graph_rounded,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                destinations: destinations
+                    .map(
+                      (item) => NavigationRailDestination(
+                    icon: Icon(item.icon),
+                    selectedIcon: Icon(item.selectedIcon),
+                    label: Text(item.label),
+                  ),
+                )
+                    .toList(),
+              ),
+            ),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                useRail ? 16 : 0,
+                8,
+                16,
+                useRail ? 16 : 0,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(useRail ? 34 : 0),
+                child: Material(
+                  color: Colors.transparent,
+                  child: IndexedStack(
+                    index: currentIndex,
+                    children: pages,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
+      bottomNavigationBar: useRail
+          ? null
+          : SafeArea(
+        minimum: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          child: NavigationBar(
+            selectedIndex: currentIndex,
+            onDestinationSelected: openTab,
+            destinations: destinations
+                .map(
+                  (item) => NavigationDestination(
+                icon: Icon(item.icon),
+                selectedIcon: Icon(item.selectedIcon),
+                label: item.label,
+              ),
+            )
+                .toList(),
+          ),
+        ),
+      ),
     );
   }
+}
+
+class _AppDestination {
+  final String label;
+  final IconData icon;
+  final IconData selectedIcon;
+
+  const _AppDestination({
+    required this.label,
+    required this.icon,
+    required this.selectedIcon,
+  });
 }

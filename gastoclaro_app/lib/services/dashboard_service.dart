@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/monthly_dashboard.dart';
+import '../utils/api_error_parser.dart';
 import 'api_headers.dart';
 
 class DashboardService {
@@ -21,10 +22,10 @@ class DashboardService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to load monthly dashboard. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo cargar el panel mensual',
       );
     }
 

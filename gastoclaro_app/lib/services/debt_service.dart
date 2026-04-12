@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/debt.dart';
+import '../utils/api_error_parser.dart';
 import 'api_headers.dart';
 
 class DebtService {
@@ -16,10 +17,10 @@ class DebtService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to load debts. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudieron cargar las deudas',
       );
     }
 
@@ -68,10 +69,10 @@ class DebtService {
     );
 
     if (response.statusCode != 201) {
-      throw Exception(
-        'Failed to create debt. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo crear la deuda',
       );
     }
   }
@@ -115,10 +116,10 @@ class DebtService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to update debt. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo actualizar la deuda',
       );
     }
   }
@@ -132,10 +133,10 @@ class DebtService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to delete debt. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo eliminar la deuda',
       );
     }
   }

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/payment_record.dart';
+import '../utils/api_error_parser.dart';
 import 'api_headers.dart';
 
 class PaymentRecordService {
@@ -21,10 +22,10 @@ class PaymentRecordService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to load payment records. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudieron cargar los pagos',
       );
     }
 
@@ -59,10 +60,10 @@ class PaymentRecordService {
     );
 
     if (response.statusCode != 201) {
-      throw Exception(
-        'Failed to create payment record. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo registrar el pago',
       );
     }
   }

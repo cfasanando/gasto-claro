@@ -14,6 +14,9 @@ class AppSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final titleStyle = Theme.of(context).textTheme.titleLarge;
+    final subtitleStyle = Theme.of(context).textTheme.bodySmall;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -21,21 +24,18 @@ class AppSectionHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              Text(title, style: titleStyle),
               if (subtitle != null) ...[
                 const SizedBox(height: 4),
-                Text(
-                  subtitle!,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                Text(subtitle!, style: subtitleStyle),
               ],
             ],
           ),
         ),
-        if (action != null) action!,
+        if (action != null) ...[
+          const SizedBox(width: 12),
+          action!,
+        ],
       ],
     );
   }

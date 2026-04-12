@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/fixed_expense.dart';
+import '../utils/api_error_parser.dart';
 import 'api_headers.dart';
 
 class FixedExpenseService {
@@ -16,10 +17,10 @@ class FixedExpenseService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to load fixed expenses. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudieron cargar los gastos fijos',
       );
     }
 
@@ -60,10 +61,10 @@ class FixedExpenseService {
     );
 
     if (response.statusCode != 201) {
-      throw Exception(
-        'Failed to create fixed expense. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo crear el gasto fijo',
       );
     }
   }
@@ -99,10 +100,10 @@ class FixedExpenseService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to update fixed expense. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo actualizar el gasto fijo',
       );
     }
   }
@@ -116,10 +117,10 @@ class FixedExpenseService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to delete fixed expense. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo eliminar el gasto fijo',
       );
     }
   }

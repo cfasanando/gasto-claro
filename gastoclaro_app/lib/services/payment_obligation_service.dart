@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/payment_obligation.dart';
+import '../utils/api_error_parser.dart';
 import 'api_headers.dart';
 
 class PaymentObligationService {
@@ -21,10 +22,10 @@ class PaymentObligationService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to load payment obligations. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudieron cargar las obligaciones',
       );
     }
 
@@ -49,10 +50,10 @@ class PaymentObligationService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to sync monthly obligations. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudieron sincronizar las obligaciones',
       );
     }
   }
