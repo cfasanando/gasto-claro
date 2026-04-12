@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\IncomeSourceController;
 use App\Http\Controllers\Api\IncomeEventController;
 use App\Http\Controllers\Api\DashboardController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\PaymentObligationController;
 
 Route::get('/ping', function () {
     return response()->json([
@@ -23,12 +24,17 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::apiResource('fixed-expenses', FixedExpenseController::class);
 Route::apiResource('income-sources', IncomeSourceController::class);
 Route::apiResource('income-events', IncomeEventController::class);
+Route::post('/payment-obligations/sync-monthly', [PaymentObligationController::class, 'syncMonthly']);
+Route::apiResource('payment-obligations', PaymentObligationController::class);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
     Route::get('/dashboard/monthly', [DashboardController::class, 'monthly']);
+
+    Route::post('/payment-obligations/sync-monthly', [PaymentObligationController::class, 'syncMonthly']);
+    Route::apiResource('payment-obligations', PaymentObligationController::class);
 
     Route::apiResource('debts', DebtController::class);
     Route::apiResource('fixed-expenses', FixedExpenseController::class);

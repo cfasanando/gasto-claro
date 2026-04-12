@@ -12,6 +12,7 @@ use Laravel\Sanctum\HasApiTokens;
 use App\Models\FixedExpense;
 use App\Models\IncomeSource;
 use App\Models\IncomeEvent;
+use App\Models\PaymentObligation;
 
 class User extends Authenticatable
 {
@@ -54,5 +55,10 @@ class User extends Authenticatable
     public function incomeEvents(): HasMany
     {
         return $this->hasMany(IncomeEvent::class);
+    }
+
+    public function paymentObligations(): HasMany
+    {
+        return $this->hasMany(PaymentObligation::class);
     }
 }
