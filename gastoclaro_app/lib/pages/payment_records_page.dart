@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../models/payment_record.dart';
 import '../services/payment_record_service.dart';
+import '../utils/app_formatters.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/app_section_header.dart';
+import '../widgets/app_status_chip.dart';
 
 class PaymentRecordsPage extends StatefulWidget {
   final int year;
@@ -49,21 +53,6 @@ class _PaymentRecordsPageState extends State<PaymentRecordsPage> {
     });
   }
 
-  String formatMoney(double value) {
-    return 'S/ ${value.toStringAsFixed(2)}';
-  }
-
-  String formatDate(DateTime? date) {
-    if (date == null) {
-      return '-';
-    }
-
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-
-    return '${date.year}-$month-$day';
-  }
-
   String translatePaymentMethod(String value) {
     switch (value) {
       case 'cash':
@@ -82,6 +71,43 @@ class _PaymentRecordsPageState extends State<PaymentRecordsPage> {
         return 'Otro';
       default:
         return value;
+    }
+  }
+
+  Color methodColor(String value) {
+    switch (value) {
+      case 'cash':
+        return Colors.green;
+      case 'bank_transfer':
+        return Colors.blue;
+      case 'credit_card':
+        return Colors.deepPurple;
+      case 'debit_card':
+        return Colors.indigo;
+      case 'yape':
+        return Colors.purple;
+      case 'plin':
+        return Colors.teal;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData methodIcon(String value) {
+    switch (value) {
+      case 'cash':
+        return Icons.payments_outlined;
+      case 'bank_transfer':
+        return Icons.account_balance_outlined;
+      case 'credit_card':
+        return Icons.credit_card_outlined;
+      case 'debit_card':
+        return Icons.wallet_outlined;
+      case 'yape':
+      case 'plin':
+        return Icons.phone_android_outlined;
+      default:
+        return Icons.receipt_long_outlined;
     }
   }
 
@@ -136,25 +162,72 @@ class _PaymentRecordsPageState extends State<PaymentRecordsPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text(
-                'Pagos del mes',
-                style: Theme.of(context).textTheme.titleLarge,
+              AppSectionHeader(
+                title: 'Pagos del mes',
+                subtitle: '${items.length} registrados',
               ),
               const SizedBox(height: 16),
               if (items.isEmpty)
-                const Text('No hay pagos registrados para este mes.')
+                const AppEmptyState(
+                  icon: Icons.payments_outlined,
+                  title: 'No hay pagos registrados para este mes',
+                  subtitle: 'Registra pagos desde el panel o desde obligaciones.',
+                )
               else
                 ...items.map(
                       (item) => Card(
-                    child: ListTile(
-                      title: Text(item.obligationTitle ?? 'Pago'),
-                      subtitle: Text(
-                        'Fecha: ${formatDate(item.paidAt)}\n'
-                            'Método: ${translatePaymentMethod(item.paymentMethod)}',
-                      ),
-                      trailing: Text(
-                        formatMoney(item.paidAmount),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.obligationTitle ?? 'Pago',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Fecha: ${AppFormatters.date(item.paidAt)}',
+                                    ),
+                                    const SizedBox(height: 8),
+                                    AppStatusChip(
+                                      label: translatePaymentMethod(item.paymentMethod),
+                                      color: methodColor(item.paymentMethod),
+                                      icon: methodIcon(item.paymentMethod),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                AppFormatters.money(item.paidAmount, item.currency),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (item.note != null && item.note!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                item.note!,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),

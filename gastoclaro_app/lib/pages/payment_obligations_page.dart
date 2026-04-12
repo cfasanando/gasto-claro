@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import '../models/payment_obligation.dart';
 import '../services/payment_obligation_service.dart';
 import '../services/payment_record_service.dart';
+import '../utils/app_formatters.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/app_section_header.dart';
+import '../widgets/app_status_chip.dart';
 
 class PaymentObligationsPage extends StatefulWidget {
   final int year;
@@ -22,6 +26,7 @@ class _PaymentObligationsPageState extends State<PaymentObligationsPage> {
   late Future<List<PaymentObligation>> futureItems;
   final PaymentObligationService obligationService = PaymentObligationService();
   final PaymentRecordService paymentRecordService = PaymentRecordService();
+
   bool isSyncing = false;
 
   @override
@@ -52,36 +57,38 @@ class _PaymentObligationsPageState extends State<PaymentObligationsPage> {
     });
   }
 
-  String formatMoney(double value) {
-    return 'S/ ${value.toStringAsFixed(2)}';
-  }
-
-  String translateStatus(String status) {
+  Color statusColor(String status) {
     switch (status) {
       case 'paid':
-        return 'Pagado';
+        return Colors.green;
       case 'partial':
-        return 'Parcial';
+        return Colors.orange;
       case 'pending':
-        return 'Pendiente';
+        return Colors.blueGrey;
       case 'overdue':
-        return 'Vencido';
+        return Colors.red;
       case 'cancelled':
-        return 'Cancelado';
+        return Colors.grey;
       default:
-        return status;
+        return Colors.grey;
     }
   }
 
-  String formatDate(DateTime? date) {
-    if (date == null) {
-      return '-';
+  IconData statusIcon(String status) {
+    switch (status) {
+      case 'paid':
+        return Icons.check_circle_outline;
+      case 'partial':
+        return Icons.timelapse_outlined;
+      case 'pending':
+        return Icons.schedule_outlined;
+      case 'overdue':
+        return Icons.warning_amber_outlined;
+      case 'cancelled':
+        return Icons.cancel_outlined;
+      default:
+        return Icons.info_outline;
     }
-
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-
-    return '${date.year}-$month-$day';
   }
 
   Future<void> syncMonthly() async {
@@ -310,58 +317,83 @@ class _PaymentObligationsPageState extends State<PaymentObligationsPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Obligaciones del mes',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: isSyncing ? null : syncMonthly,
-                    icon: isSyncing
-                        ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                        : const Icon(Icons.sync),
-                    label: Text(isSyncing ? 'Sincronizando...' : 'Sincronizar'),
-                  ),
-                ],
+              AppSectionHeader(
+                title: 'Obligaciones del mes',
+                subtitle: '${items.length} registradas',
+                action: ElevatedButton.icon(
+                  onPressed: isSyncing ? null : syncMonthly,
+                  icon: isSyncing
+                      ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                      : const Icon(Icons.sync),
+                  label: Text(isSyncing ? 'Sincronizando...' : 'Sincronizar'),
+                ),
               ),
               const SizedBox(height: 16),
               if (items.isEmpty)
-                const Text('No hay obligaciones registradas para este mes.')
+                const AppEmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'No hay obligaciones registradas para este mes',
+                  subtitle: 'Sincroniza el mes o crea datos base para comenzar.',
+                )
               else
                 ...items.map(
                       (item) => Card(
-                    child: ListTile(
-                      title: Text(item.title),
-                      subtitle: Text(
-                        'Vence: ${formatDate(item.dueDate)}\n'
-                            'Estado: ${translateStatus(item.status)}',
-                      ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
                         children: [
-                          Text(
-                            formatMoney(item.amountDue),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 4),
-                          if (item.status != 'paid' && item.status != 'cancelled')
-                            GestureDetector(
-                              onTap: () => registerPayment(item),
-                              child: const Text(
-                                'Pagar',
-                                style: TextStyle(
-                                  color: Colors.blue,
-                                  fontWeight: FontWeight.w600,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.title,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Vence: ${AppFormatters.date(item.dueDate)}',
+                                    ),
+                                    const SizedBox(height: 8),
+                                    AppStatusChip(
+                                      label: AppFormatters.obligationStatus(item.status),
+                                      color: statusColor(item.status),
+                                      icon: statusIcon(item.status),
+                                    ),
+                                  ],
                                 ),
                               ),
+                              const SizedBox(width: 12),
+                              Text(
+                                AppFormatters.money(item.amountDue, item.currency),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (item.status != 'paid' && item.status != 'cancelled') ...[
+                            const SizedBox(height: 14),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: FilledButton.icon(
+                                onPressed: () => registerPayment(item),
+                                icon: const Icon(Icons.payments_outlined),
+                                label: const Text('Pagar'),
+                              ),
                             ),
+                          ],
                         ],
                       ),
                     ),
