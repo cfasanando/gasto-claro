@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'pages/dashboard_page.dart';
+import 'pages/debts_page.dart';
 import 'pages/payment_obligations_page.dart';
 import 'pages/payment_records_page.dart';
 
@@ -52,12 +53,14 @@ class _HomePageState extends State<HomePage> {
       DashboardPage(year: year, month: month),
       PaymentObligationsPage(year: year, month: month),
       PaymentRecordsPage(year: year, month: month),
+      const DebtsPage(),
     ];
 
     final titles = [
       'Panel mensual',
       'Obligaciones',
       'Pagos',
+      'Deudas',
     ];
 
     return Scaffold(
@@ -75,6 +78,7 @@ class _HomePageState extends State<HomePage> {
             currentIndex = value;
           });
         },
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard_outlined),
@@ -87,6 +91,10 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(
             icon: Icon(Icons.payments_outlined),
             label: 'Pagos',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            label: 'Deudas',
           ),
         ],
       ),
