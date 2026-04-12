@@ -1,4 +1,3 @@
-
 <?php
 
 declare(strict_types=1);
@@ -10,7 +9,6 @@ use App\Models\FixedExpense;
 use App\Models\PaymentObligation;
 use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Database\QueryException;
 
 class SyncMonthlyObligationsService
 {
@@ -113,39 +111,32 @@ class SyncMonthlyObligationsService
         Carbon $dueDate,
         array $values,
     ): array {
-        $attributes = [
-            'user_id' => $userId,
-            'source_type' => $sourceType,
-            'source_id' => $sourceId,
-            'due_date' => $dueDate->toDateString(),
-        ];
+        $dueDateString = $dueDate->toDateString();
 
         $existing = PaymentObligation::query()
-            ->where($attributes)
+            ->where('user_id', $userId)
+            ->where('source_type', $sourceType)
+            ->where('source_id', $sourceId)
+            ->whereDate('due_date', $dueDateString)
             ->first();
 
         if ($existing) {
             return $this->updateExistingObligation($existing, $dueDate, $values);
         }
 
-        try {
-            PaymentObligation::query()->create([
-                ...$attributes,
-                ...$values,
-                'status' => $this->resolveInitialStatus($dueDate),
-            ]);
+        PaymentObligation::query()->create([
+            'user_id' => $userId,
+            'source_type' => $sourceType,
+            'source_id' => $sourceId,
+            'due_date' => $dueDateString,
+            ...$values,
+            'status' => $this->resolveInitialStatus($dueDate),
+        ]);
 
-            return [
-                'created' => true,
-                'updated' => false,
-            ];
-        } catch (QueryException) {
-            $existing = PaymentObligation::query()
-                ->where($attributes)
-                ->firstOrFail();
-
-            return $this->updateExistingObligation($existing, $dueDate, $values);
-        }
+        return [
+            'created' => true,
+            'updated' => false,
+        ];
     }
 
     private function updateExistingObligation(
