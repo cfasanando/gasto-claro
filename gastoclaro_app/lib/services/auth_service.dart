@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import '../models/api_exception.dart';
+import '../utils/api_error_parser.dart';
 import 'api_headers.dart';
 import 'auth_storage_service.dart';
 
@@ -25,10 +27,10 @@ class AuthService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to login. '
-            'Status: ${response.statusCode}. '
-            'Body: ${response.body}',
+      throw ApiErrorParser.fromResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+        fallbackMessage: 'No se pudo iniciar sesión',
       );
     }
 
@@ -36,7 +38,7 @@ class AuthService {
     final token = json['token']?.toString();
 
     if (token == null || token.isEmpty) {
-      throw Exception('Token not found in login response.');
+      throw ApiException('No se recibió un token válido del backend');
     }
 
     await authStorageService.saveToken(token);

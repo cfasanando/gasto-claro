@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/debt.dart';
 import '../services/debt_service.dart';
 import '../utils/app_formatters.dart';
+import '../utils/app_validators.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
@@ -32,6 +33,13 @@ class _DebtsPageState extends State<DebtsPage> {
     setState(() {
       loadItems();
     });
+  }
+
+  InputDecoration dialogInputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+    );
   }
 
   String translateDebtType(String value) {
@@ -105,6 +113,8 @@ class _DebtsPageState extends State<DebtsPage> {
   }
 
   Future<void> openDebtDialog({Debt? existingDebt}) async {
+    final formKey = GlobalKey<FormState>();
+
     final nameController = TextEditingController(text: existingDebt?.name ?? '');
     final creditorController = TextEditingController(
       text: existingDebt?.creditorName ?? '',
@@ -146,169 +156,189 @@ class _DebtsPageState extends State<DebtsPage> {
                 existingDebt == null ? 'Nueva deuda' : 'Editar deuda',
               ),
               content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Nombre',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: creditorController,
-                      decoration: const InputDecoration(
-                        labelText: 'Entidad o acreedor',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: debtType,
-                      decoration: const InputDecoration(
-                        labelText: 'Tipo de deuda',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'credit_card',
-                          child: Text('Tarjeta de crédito'),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: nameController,
+                        decoration: dialogInputDecoration('Nombre'),
+                        validator: (value) => AppValidators.requiredText(
+                          value,
+                          label: 'El nombre',
                         ),
-                        DropdownMenuItem(
-                          value: 'bank_loan',
-                          child: Text('Préstamo bancario'),
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: creditorController,
+                        decoration: dialogInputDecoration('Entidad o acreedor'),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: debtType,
+                        decoration: dialogInputDecoration('Tipo de deuda'),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'credit_card',
+                            child: Text('Tarjeta de crédito'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'bank_loan',
+                            child: Text('Préstamo bancario'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'third_party_loan',
+                            child: Text('Préstamo a tercero'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'store_credit',
+                            child: Text('Crédito de tienda'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'recurring_commitment',
+                            child: Text('Compromiso recurrente'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            debtType = value ?? 'credit_card';
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: currency,
+                        decoration: dialogInputDecoration('Moneda'),
+                        items: const [
+                          DropdownMenuItem(value: 'PEN', child: Text('PEN')),
+                          DropdownMenuItem(value: 'USD', child: Text('USD')),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            currency = value ?? 'PEN';
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: originalAmountController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: dialogInputDecoration('Monto original'),
+                        validator: (value) => AppValidators.optionalNumber(
+                          value,
+                          label: 'El monto original',
                         ),
-                        DropdownMenuItem(
-                          value: 'third_party_loan',
-                          child: Text('Préstamo a tercero'),
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: currentBalanceController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: dialogInputDecoration('Saldo actual'),
+                        validator: (value) =>
+                            AppValidators.requiredPositiveNumber(
+                              value,
+                              label: 'El saldo actual',
+                              allowZero: true,
+                            ),
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: monthlyDueController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: dialogInputDecoration('Cuota mensual'),
+                        validator: (value) => AppValidators.optionalNumber(
+                          value,
+                          label: 'La cuota mensual',
                         ),
-                        DropdownMenuItem(
-                          value: 'store_credit',
-                          child: Text('Crédito de tienda'),
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: minimumPaymentController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: dialogInputDecoration('Pago mínimo'),
+                        validator: (value) => AppValidators.optionalNumber(
+                          value,
+                          label: 'El pago mínimo',
                         ),
-                        DropdownMenuItem(
-                          value: 'recurring_commitment',
-                          child: Text('Compromiso recurrente'),
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: interestRateController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: dialogInputDecoration('Interés mensual (%)'),
+                        validator: (value) => AppValidators.optionalNumber(
+                          value,
+                          label: 'El interés mensual',
+                          allowZero: true,
                         ),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          debtType = value ?? 'credit_card';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: currency,
-                      decoration: const InputDecoration(
-                        labelText: 'Moneda',
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                       ),
-                      items: const [
-                        DropdownMenuItem(value: 'PEN', child: Text('PEN')),
-                        DropdownMenuItem(value: 'USD', child: Text('USD')),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          currency = value ?? 'PEN';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: originalAmountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Monto original',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: currentBalanceController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Saldo actual',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: monthlyDueController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Cuota mensual',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: minimumPaymentController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Pago mínimo',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: interestRateController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Interés mensual (%)',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: dueDayController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Día de vencimiento',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: status,
-                      decoration: const InputDecoration(
-                        labelText: 'Estado',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'active',
-                          child: Text('Activa'),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: dueDayController,
+                        keyboardType: TextInputType.number,
+                        decoration: dialogInputDecoration('Día de vencimiento'),
+                        validator: (value) => AppValidators.optionalIntegerRange(
+                          value,
+                          label: 'El día de vencimiento',
+                          min: 1,
+                          max: 31,
                         ),
-                        DropdownMenuItem(
-                          value: 'paid',
-                          child: Text('Pagada'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'suspended',
-                          child: Text('Suspendida'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'cancelled',
-                          child: Text('Cancelada'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          status = value ?? 'active';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Tiene pago fijo'),
-                      value: hasFixedPayment,
-                      onChanged: (value) {
-                        setDialogState(() {
-                          hasFixedPayment = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: notesController,
-                      decoration: const InputDecoration(
-                        labelText: 'Notas',
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: status,
+                        decoration: dialogInputDecoration('Estado'),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'active',
+                            child: Text('Activa'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'paid',
+                            child: Text('Pagada'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'suspended',
+                            child: Text('Suspendida'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'cancelled',
+                            child: Text('Cancelada'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            status = value ?? 'active';
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Tiene pago fijo'),
+                        value: hasFixedPayment,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            hasFixedPayment = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: notesController,
+                        decoration: dialogInputDecoration('Notas'),
+                        maxLines: 2,
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -317,7 +347,15 @@ class _DebtsPageState extends State<DebtsPage> {
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
+                  onPressed: () {
+                    final isValid = formKey.currentState?.validate() ?? false;
+
+                    if (!isValid) {
+                      return;
+                    }
+
+                    Navigator.of(context).pop(true);
+                  },
                   child: const Text('Guardar'),
                 ),
               ],
@@ -333,20 +371,6 @@ class _DebtsPageState extends State<DebtsPage> {
 
     final currentBalance = double.tryParse(currentBalanceController.text.trim());
 
-    if (nameController.text.trim().isEmpty || currentBalance == null || currentBalance < 0) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Completa al menos nombre y saldo actual válido'),
-        ),
-      );
-
-      return;
-    }
-
     try {
       if (existingDebt == null) {
         await debtService.createDebt(
@@ -357,7 +381,7 @@ class _DebtsPageState extends State<DebtsPage> {
               : creditorController.text.trim(),
           currency: currency,
           originalAmount: double.tryParse(originalAmountController.text.trim()),
-          currentBalance: currentBalance,
+          currentBalance: currentBalance ?? 0,
           monthlyDueAmount: double.tryParse(monthlyDueController.text.trim()),
           minimumPayment: double.tryParse(minimumPaymentController.text.trim()),
           interestRateMonthly: double.tryParse(interestRateController.text.trim()),
@@ -378,7 +402,7 @@ class _DebtsPageState extends State<DebtsPage> {
               : creditorController.text.trim(),
           currency: currency,
           originalAmount: double.tryParse(originalAmountController.text.trim()),
-          currentBalance: currentBalance,
+          currentBalance: currentBalance ?? 0,
           monthlyDueAmount: double.tryParse(monthlyDueController.text.trim()),
           minimumPayment: double.tryParse(minimumPaymentController.text.trim()),
           interestRateMonthly: double.tryParse(interestRateController.text.trim()),
