@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'models/app_user.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/debts_page.dart';
 import 'pages/fixed_expenses_page.dart';
@@ -9,6 +10,7 @@ import 'pages/login_page.dart';
 import 'pages/payment_obligations_page.dart';
 import 'pages/payment_records_page.dart';
 import 'services/auth_service.dart';
+import 'services/profile_service.dart';
 
 void main() {
   runApp(const GastoClaroApp());
@@ -118,6 +120,11 @@ class _HomePageState extends State<HomePage> {
   late int year;
   late int month;
 
+  final ProfileService profileService = ProfileService();
+
+  AppUser? currentUser;
+  bool isLoadingUser = false;
+
   static const List<String> monthNames = [
     'Enero',
     'Febrero',
@@ -140,6 +147,40 @@ class _HomePageState extends State<HomePage> {
     final now = DateTime.now();
     year = now.year;
     month = now.month;
+
+    loadCurrentUser();
+  }
+
+  Future<void> loadCurrentUser() async {
+    setState(() {
+      isLoadingUser = true;
+    });
+
+    try {
+      final user = await profileService.getMe();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        currentUser = user;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        currentUser = null;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoadingUser = false;
+        });
+      }
+    }
   }
 
   bool get pageUsesMonth {
@@ -269,6 +310,16 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  String get userInitial {
+    final name = currentUser?.name.trim() ?? '';
+
+    if (name.isEmpty) {
+      return '?';
+    }
+
+    return name.substring(0, 1).toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
@@ -296,6 +347,8 @@ class _HomePageState extends State<HomePage> {
       'Ingresos',
       'Eventos',
     ];
+
+    final wideScreen = MediaQuery.of(context).size.width >= 950;
 
     return Scaffold(
       appBar: AppBar(
@@ -334,14 +387,62 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
           PopupMenuButton<String>(
-            tooltip: 'Cuenta',
+            tooltip: currentUser?.email.isNotEmpty == true
+                ? currentUser!.email
+                : 'Cuenta',
             onSelected: (value) async {
-              if (value == 'logout') {
+              if (value == 'refresh_profile') {
+                await loadCurrentUser();
+              } else if (value == 'logout') {
                 await widget.onLogout();
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                enabled: false,
+                child: SizedBox(
+                  width: 240,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        currentUser?.name.isNotEmpty == true
+                            ? currentUser!.name
+                            : 'Usuario',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        currentUser?.email.isNotEmpty == true
+                            ? currentUser!.email
+                            : 'Sin correo disponible',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      if (isLoadingUser) ...[
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Cargando perfil...',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'refresh_profile',
+                child: Row(
+                  children: [
+                    Icon(Icons.refresh, size: 18),
+                    SizedBox(width: 8),
+                    Text('Recargar perfil'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
                 value: 'logout',
                 child: Row(
                   children: [
@@ -352,7 +453,33 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ],
-            icon: const Icon(Icons.account_circle_outlined),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    child: Text(userInitial),
+                  ),
+                  if (wideScreen) ...[
+                    const SizedBox(width: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 120),
+                      child: Text(
+                        currentUser?.name.isNotEmpty == true
+                            ? currentUser!.name
+                            : 'Cuenta',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ],
       ),
