@@ -2,30 +2,36 @@ class MonthlyDashboard {
   final String selectedMonth;
   final double expectedIncomeTotal;
   final double receivedIncomeTotal;
-  final double fixedExpenseTotal;
-  final double debtDueTotal;
   final double obligationTotal;
+  final double paidTotal;
+  final double remainingObligationTotal;
   final double projectedBalance;
-  final int fixedExpensesCount;
-  final int debtsCount;
+  final double actualBalance;
+  final int paymentObligationsCount;
+  final int paymentRecordsCount;
   final int incomeEventsCount;
   final List<Map<String, dynamic>> upcomingItems;
   final List<Map<String, dynamic>> attentionItems;
+  final List<Map<String, dynamic>> paidItems;
+  final List<Map<String, dynamic>> pendingItems;
   final String dashboardNote;
 
   MonthlyDashboard({
     required this.selectedMonth,
     required this.expectedIncomeTotal,
     required this.receivedIncomeTotal,
-    required this.fixedExpenseTotal,
-    required this.debtDueTotal,
     required this.obligationTotal,
+    required this.paidTotal,
+    required this.remainingObligationTotal,
     required this.projectedBalance,
-    required this.fixedExpensesCount,
-    required this.debtsCount,
+    required this.actualBalance,
+    required this.paymentObligationsCount,
+    required this.paymentRecordsCount,
     required this.incomeEventsCount,
     required this.upcomingItems,
     required this.attentionItems,
+    required this.paidItems,
+    required this.pendingItems,
     required this.dashboardNote,
   });
 
@@ -64,15 +70,18 @@ class MonthlyDashboard {
       selectedMonth: json['selected_month']?.toString() ?? '',
       expectedIncomeTotal: toDouble(json['expected_income_total']),
       receivedIncomeTotal: toDouble(json['received_income_total']),
-      fixedExpenseTotal: toDouble(json['fixed_expense_total']),
-      debtDueTotal: toDouble(json['debt_due_total']),
       obligationTotal: toDouble(json['obligation_total']),
+      paidTotal: toDouble(json['paid_total']),
+      remainingObligationTotal: toDouble(json['remaining_obligation_total']),
       projectedBalance: toDouble(json['projected_balance']),
-      fixedExpensesCount: toInt(json['fixed_expenses_count']),
-      debtsCount: toInt(json['debts_count']),
+      actualBalance: toDouble(json['actual_balance']),
+      paymentObligationsCount: toInt(json['payment_obligations_count']),
+      paymentRecordsCount: toInt(json['payment_records_count']),
       incomeEventsCount: toInt(json['income_events_count']),
       upcomingItems: toItemList(json['upcoming_items']),
       attentionItems: toItemList(json['attention_items']),
+      paidItems: toItemList(json['paid_items']),
+      pendingItems: toItemList(json['pending_items']),
       dashboardNote: json['dashboard_note']?.toString() ?? '',
     );
   }

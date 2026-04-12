@@ -56,11 +56,15 @@ class _DashboardPageState extends State<DashboardPage> {
     });
   }
 
+  String formatMoney(double value) {
+    return 'S/ ${value.toStringAsFixed(2)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('GastoClaro Dashboard'),
+        title: const Text('Panel mensual'),
         actions: [
           IconButton(
             onPressed: reload,
@@ -73,7 +77,14 @@ class _DashboardPageState extends State<DashboardPage> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-              child: CircularProgressIndicator(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Cargando panel...'),
+                ],
+              ),
             );
           }
 
@@ -87,7 +98,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     const Icon(Icons.error_outline, size: 48),
                     const SizedBox(height: 16),
                     const Text(
-                      'Failed to load dashboard',
+                      'No se pudo cargar el panel',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -101,7 +112,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: reload,
-                      child: const Text('Retry'),
+                      child: const Text('Reintentar'),
                     ),
                   ],
                 ),
@@ -115,59 +126,116 @@ class _DashboardPageState extends State<DashboardPage> {
             padding: const EdgeInsets.all(16),
             children: [
               _SummaryCard(
-                title: 'Selected month',
+                title: 'Mes seleccionado',
                 value: dashboard.selectedMonth,
               ),
               const SizedBox(height: 12),
               _SummaryCard(
-                title: 'Expected income',
-                value: dashboard.expectedIncomeTotal.toStringAsFixed(2),
+                title: 'Ingreso esperado',
+                value: formatMoney(dashboard.expectedIncomeTotal),
               ),
               const SizedBox(height: 12),
               _SummaryCard(
-                title: 'Fixed expenses',
-                value: dashboard.fixedExpenseTotal.toStringAsFixed(2),
+                title: 'Ingreso recibido',
+                value: formatMoney(dashboard.receivedIncomeTotal),
               ),
               const SizedBox(height: 12),
               _SummaryCard(
-                title: 'Debt due total',
-                value: dashboard.debtDueTotal.toStringAsFixed(2),
+                title: 'Obligaciones del mes',
+                value: formatMoney(dashboard.obligationTotal),
               ),
               const SizedBox(height: 12),
               _SummaryCard(
-                title: 'Obligation total',
-                value: dashboard.obligationTotal.toStringAsFixed(2),
+                title: 'Total pagado',
+                value: formatMoney(dashboard.paidTotal),
               ),
               const SizedBox(height: 12),
               _SummaryCard(
-                title: 'Projected balance',
-                value: dashboard.projectedBalance.toStringAsFixed(2),
+                title: 'Pendiente por pagar',
+                value: formatMoney(dashboard.remainingObligationTotal),
+                isNegative: dashboard.remainingObligationTotal > 0,
+              ),
+              const SizedBox(height: 12),
+              _SummaryCard(
+                title: 'Balance proyectado',
+                value: formatMoney(dashboard.projectedBalance),
                 isNegative: dashboard.projectedBalance < 0,
+              ),
+              const SizedBox(height: 12),
+              _SummaryCard(
+                title: 'Balance real',
+                value: formatMoney(dashboard.actualBalance),
+                isNegative: dashboard.actualBalance < 0,
               ),
               const SizedBox(height: 24),
               Text(
-                'Attention items',
+                'Requieren atención',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
               if (dashboard.attentionItems.isEmpty)
-                const Text('No attention items.')
+                const Text('No hay elementos en atención.')
               else
-                ...dashboard.attentionItems.map(_ObligationTile.new),
+                ...dashboard.attentionItems.map(
+                      (item) => _ObligationTile(
+                    item: item,
+                    amountKey: 'amount_due',
+                  ),
+                ),
               const SizedBox(height: 24),
               Text(
-                'Upcoming items',
+                'Pendientes',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              if (dashboard.pendingItems.isEmpty)
+                const Text('No hay pendientes.')
+              else
+                ...dashboard.pendingItems.map(
+                      (item) => _ObligationTile(
+                    item: item,
+                    amountKey: 'amount_due',
+                  ),
+                ),
+              const SizedBox(height: 24),
+              Text(
+                'Pagados',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              if (dashboard.paidItems.isEmpty)
+                const Text('No hay pagos completados.')
+              else
+                ...dashboard.paidItems.map(
+                      (item) => _ObligationTile(
+                    item: item,
+                    amountKey: 'amount_due',
+                  ),
+                ),
+              const SizedBox(height: 24),
+              Text(
+                'Próximos',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
               if (dashboard.upcomingItems.isEmpty)
-                const Text('No upcoming items.')
+                const Text('No hay próximos vencimientos.')
               else
-                ...dashboard.upcomingItems.map(_ObligationTile.new),
+                ...dashboard.upcomingItems.map(
+                      (item) => _ObligationTile(
+                    item: item,
+                    amountKey: 'amount_due',
+                  ),
+                ),
               const SizedBox(height: 24),
-              Text(
-                dashboard.dashboardNote,
-                style: Theme.of(context).textTheme.bodySmall,
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    dashboard.dashboardNote,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
               ),
             ],
           );
@@ -208,8 +276,34 @@ class _SummaryCard extends StatelessWidget {
 
 class _ObligationTile extends StatelessWidget {
   final Map<String, dynamic> item;
+  final String amountKey;
 
-  const _ObligationTile(this.item);
+  const _ObligationTile({
+    required this.item,
+    required this.amountKey,
+  });
+
+  String formatMoney(dynamic value) {
+    final parsed = double.tryParse(value.toString()) ?? 0;
+    return 'S/ ${parsed.toStringAsFixed(2)}';
+  }
+
+  String translateStatus(String? status) {
+    switch (status) {
+      case 'paid':
+        return 'Pagado';
+      case 'partial':
+        return 'Parcial';
+      case 'pending':
+        return 'Pendiente';
+      case 'overdue':
+        return 'Vencido';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return status ?? '-';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -217,11 +311,11 @@ class _ObligationTile extends StatelessWidget {
       child: ListTile(
         title: Text(item['title']?.toString() ?? ''),
         subtitle: Text(
-          'Due date: ${item['due_date'] ?? '-'}\n'
-              'Status: ${item['schedule_status'] ?? '-'}',
+          'Vence: ${item['due_date'] ?? '-'}\n'
+              'Estado: ${translateStatus(item['status']?.toString())}',
         ),
         trailing: Text(
-          item['amount']?.toString() ?? '0',
+          formatMoney(item[amountKey]),
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
