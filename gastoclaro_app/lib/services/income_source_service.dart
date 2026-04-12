@@ -68,4 +68,61 @@ class IncomeSourceService {
       );
     }
   }
+
+  Future<void> updateIncomeSource({
+    required int id,
+    required String name,
+    required String type,
+    double? defaultAmount,
+    required String currency,
+    required bool isActive,
+    String? notes,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/income-sources/$id');
+
+    final response = await http.put(
+      uri,
+      headers: const {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'name': name,
+        'type': type,
+        'default_amount': defaultAmount,
+        'currency': currency,
+        'is_active': isActive,
+        'notes': notes,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to update income source. '
+            'Status: ${response.statusCode}. '
+            'Body: ${response.body}',
+      );
+    }
+  }
+
+  Future<void> deleteIncomeSource(int id) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/income-sources/$id');
+
+    final response = await http.delete(
+      uri,
+      headers: const {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to delete income source. '
+            'Status: ${response.statusCode}. '
+            'Body: ${response.body}',
+      );
+    }
+  }
 }
