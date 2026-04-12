@@ -4,6 +4,10 @@ import '../models/income_event.dart';
 import '../models/income_source.dart';
 import '../services/income_event_service.dart';
 import '../services/income_source_service.dart';
+import '../utils/app_formatters.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/app_section_header.dart';
+import '../widgets/app_status_chip.dart';
 
 class IncomeEventsPage extends StatefulWidget {
   final int year;
@@ -52,11 +56,6 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
     });
   }
 
-  String formatMoney(double value, String currency) {
-    final symbol = currency == 'USD' ? r'$' : 'S/';
-    return '$symbol ${value.toStringAsFixed(2)}';
-  }
-
   String translateStatus(String value) {
     switch (value) {
       case 'planned':
@@ -70,15 +69,30 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
     }
   }
 
-  String formatDate(DateTime? date) {
-    if (date == null) {
-      return '-';
+  Color statusColor(String value) {
+    switch (value) {
+      case 'planned':
+        return Colors.blueGrey;
+      case 'received':
+        return Colors.green;
+      case 'missed':
+        return Colors.red;
+      default:
+        return Colors.grey;
     }
+  }
 
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-
-    return '${date.year}-$month-$day';
+  IconData statusIcon(String value) {
+    switch (value) {
+      case 'planned':
+        return Icons.schedule_outlined;
+      case 'received':
+        return Icons.check_circle_outline;
+      case 'missed':
+        return Icons.warning_amber_outlined;
+      default:
+        return Icons.info_outline;
+    }
   }
 
   String defaultExpectedDate() {
@@ -103,12 +117,12 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
     );
     final expectedDateController = TextEditingController(
       text: existingEvent != null
-          ? formatDate(existingEvent.expectedDate)
+          ? AppFormatters.date(existingEvent.expectedDate)
           : defaultExpectedDate(),
     );
     final receivedDateController = TextEditingController(
       text: existingEvent?.receivedDate != null
-          ? formatDate(existingEvent!.receivedDate)
+          ? AppFormatters.date(existingEvent!.receivedDate)
           : '',
     );
     final notesController = TextEditingController(
@@ -458,87 +472,103 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Eventos de ingreso',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: openCreateIncomeEventDialog,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Nuevo'),
-                  ),
-                ],
+              AppSectionHeader(
+                title: 'Eventos de ingreso',
+                subtitle: '${items.length} registrados en este mes',
+                action: ElevatedButton.icon(
+                  onPressed: openCreateIncomeEventDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Nuevo'),
+                ),
               ),
               const SizedBox(height: 16),
               if (items.isEmpty)
-                const Text('No hay eventos de ingreso para este mes.')
+                const AppEmptyState(
+                  icon: Icons.event_note_outlined,
+                  title: 'No hay eventos de ingreso para este mes',
+                  subtitle: 'Agrega un evento para reflejar ingresos esperados o recibidos.',
+                )
               else
                 ...items.map(
                       (item) => Card(
-                    child: ListTile(
-                      title: Text(item.title),
-                      subtitle: Text(
-                        'Fuente: ${item.incomeSourceName ?? 'Sin fuente'}\n'
-                            'Esperado: ${formatDate(item.expectedDate)}\n'
-                            'Estado: ${translateStatus(item.status)}',
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text('Fuente: ${item.incomeSourceName ?? 'Sin fuente'}'),
+                                const SizedBox(height: 6),
+                                Text('Esperado: ${AppFormatters.date(item.expectedDate)}'),
+                                if (item.receivedDate != null) ...[
+                                  const SizedBox(height: 6),
+                                  Text('Recibido: ${AppFormatters.date(item.receivedDate)}'),
+                                ],
+                                const SizedBox(height: 10),
+                                AppStatusChip(
+                                  label: translateStatus(item.status),
+                                  color: statusColor(item.status),
+                                  icon: statusIcon(item.status),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
                           Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                formatMoney(item.amount, item.currency),
+                                AppFormatters.money(item.amount, item.currency),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
+                                  fontSize: 16,
                                 ),
                               ),
-                              if (item.receivedDate != null)
-                                Text(
-                                  'Recibido: ${formatDate(item.receivedDate)}',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(width: 8),
-                          PopupMenuButton<String>(
-                            tooltip: 'Acciones',
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                openEditIncomeEventDialog(item);
-                              } else if (value == 'delete') {
-                                confirmDeleteIncomeEvent(item);
-                              }
-                            },
-                            itemBuilder: (context) => const [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Editar'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete_outline, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Eliminar'),
-                                  ],
-                                ),
+                              PopupMenuButton<String>(
+                                tooltip: 'Acciones',
+                                onSelected: (value) {
+                                  if (value == 'edit') {
+                                    openEditIncomeEventDialog(item);
+                                  } else if (value == 'delete') {
+                                    confirmDeleteIncomeEvent(item);
+                                  }
+                                },
+                                itemBuilder: (context) => const [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit_outlined, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Editar'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete_outline, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Eliminar'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                icon: const Icon(Icons.more_vert),
                               ),
                             ],
-                            icon: const Icon(Icons.more_vert),
                           ),
                         ],
                       ),

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../models/debt.dart';
 import '../services/debt_service.dart';
+import '../utils/app_formatters.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/app_section_header.dart';
+import '../widgets/app_status_chip.dart';
 
 class DebtsPage extends StatefulWidget {
   const DebtsPage({super.key});
@@ -28,11 +32,6 @@ class _DebtsPageState extends State<DebtsPage> {
     setState(() {
       loadItems();
     });
-  }
-
-  String formatMoney(double value, String currency) {
-    final symbol = currency == 'USD' ? r'$' : 'S/';
-    return '$symbol ${value.toStringAsFixed(2)}';
   }
 
   String translateDebtType(String value) {
@@ -64,6 +63,36 @@ class _DebtsPageState extends State<DebtsPage> {
         return 'Cancelada';
       default:
         return value;
+    }
+  }
+
+  Color statusColor(String value) {
+    switch (value) {
+      case 'active':
+        return Colors.blueGrey;
+      case 'paid':
+        return Colors.green;
+      case 'suspended':
+        return Colors.orange;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData statusIcon(String value) {
+    switch (value) {
+      case 'active':
+        return Icons.account_balance_wallet_outlined;
+      case 'paid':
+        return Icons.check_circle_outline;
+      case 'suspended':
+        return Icons.pause_circle_outline;
+      case 'cancelled':
+        return Icons.cancel_outlined;
+      default:
+        return Icons.info_outline;
     }
   }
 
@@ -496,85 +525,121 @@ class _DebtsPageState extends State<DebtsPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Deudas registradas',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: openCreateDebtDialog,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Nueva'),
-                  ),
-                ],
+              AppSectionHeader(
+                title: 'Deudas registradas',
+                subtitle: '${items.length} registradas',
+                action: ElevatedButton.icon(
+                  onPressed: openCreateDebtDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Nueva'),
+                ),
               ),
               const SizedBox(height: 16),
               if (items.isEmpty)
-                const Text('No hay deudas registradas.')
+                const AppEmptyState(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'No hay deudas registradas',
+                  subtitle: 'Agrega una deuda para comenzar a planificar pagos.',
+                )
               else
                 ...items.map(
                       (item) => Card(
-                    child: ListTile(
-                      title: Text(item.name),
-                      subtitle: Text(
-                        '${translateDebtType(item.debtType)}\n'
-                            'Estado: ${translateStatus(item.status)}\n'
-                            'Vence día: ${item.dueDay ?? '-'}',
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(translateDebtType(item.debtType)),
+                                const SizedBox(height: 6),
+                                Text('Vence día: ${item.dueDay ?? '-'}'),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    AppStatusChip(
+                                      label: translateStatus(item.status),
+                                      color: statusColor(item.status),
+                                      icon: statusIcon(item.status),
+                                    ),
+                                    if (item.hasFixedPayment)
+                                      const AppStatusChip(
+                                        label: 'Pago fijo',
+                                        color: Colors.indigo,
+                                        icon: Icons.repeat_outlined,
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
                           Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                formatMoney(item.currentBalance, item.currency),
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                AppFormatters.money(
+                                  item.currentBalance,
+                                  item.currency,
+                                ),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                               ),
-                              if (item.monthlyDueAmount != null)
+                              if (item.monthlyDueAmount != null) ...[
+                                const SizedBox(height: 4),
                                 Text(
-                                  'Cuota: ${formatMoney(item.monthlyDueAmount!, item.currency)}',
+                                  'Cuota: ${AppFormatters.money(item.monthlyDueAmount!, item.currency)}',
                                   style: const TextStyle(fontSize: 12),
                                 ),
-                            ],
-                          ),
-                          const SizedBox(width: 8),
-                          PopupMenuButton<String>(
-                            tooltip: 'Acciones',
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                openEditDebtDialog(item);
-                              } else if (value == 'delete') {
-                                confirmDeleteDebt(item);
-                              }
-                            },
-                            itemBuilder: (context) => const [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Editar'),
-                                  ],
-                                ),
+                              ],
+                              PopupMenuButton<String>(
+                                tooltip: 'Acciones',
+                                onSelected: (value) {
+                                  if (value == 'edit') {
+                                    openEditDebtDialog(item);
+                                  } else if (value == 'delete') {
+                                    confirmDeleteDebt(item);
+                                  }
+                                },
+                                itemBuilder: (context) => const [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit_outlined, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Editar'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete_outline, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Eliminar'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                icon: const Icon(Icons.more_vert),
                               ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete_outline, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Eliminar'),
-                                  ],
-                                ),
-                              ),
                             ],
-                            icon: const Icon(Icons.more_vert),
                           ),
                         ],
                       ),

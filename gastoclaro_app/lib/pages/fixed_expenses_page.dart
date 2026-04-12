@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../models/fixed_expense.dart';
 import '../services/fixed_expense_service.dart';
+import '../utils/app_formatters.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/app_section_header.dart';
+import '../widgets/app_status_chip.dart';
 
 class FixedExpensesPage extends StatefulWidget {
   const FixedExpensesPage({super.key});
@@ -30,11 +34,6 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
     });
   }
 
-  String formatMoney(double value, String currency) {
-    final symbol = currency == 'USD' ? r'$' : 'S/';
-    return '$symbol ${value.toStringAsFixed(2)}';
-  }
-
   String translateFrequency(String value) {
     switch (value) {
       case 'monthly':
@@ -46,10 +45,6 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
       default:
         return value;
     }
-  }
-
-  String translateState(bool isActive) {
-    return isActive ? 'Activo' : 'Inactivo';
   }
 
   Future<void> openCreateFixedExpenseDialog() async {
@@ -407,89 +402,116 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Gastos fijos registrados',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: openCreateFixedExpenseDialog,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Nuevo'),
-                  ),
-                ],
+              AppSectionHeader(
+                title: 'Gastos fijos registrados',
+                subtitle: '${items.length} registrados',
+                action: ElevatedButton.icon(
+                  onPressed: openCreateFixedExpenseDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Nuevo'),
+                ),
               ),
               const SizedBox(height: 16),
               if (items.isEmpty)
-                const Text('No hay gastos fijos registrados.')
+                const AppEmptyState(
+                  icon: Icons.home_work_outlined,
+                  title: 'No hay gastos fijos registrados',
+                  subtitle: 'Agrega un gasto fijo para usar mejor tu planificación.',
+                )
               else
                 ...items.map(
                       (item) => Card(
-                    child: ListTile(
-                      title: Text(item.name),
-                      subtitle: Text(
-                        '${item.category ?? 'Sin categoría'}\n'
-                            'Frecuencia: ${translateFrequency(item.frequency)}\n'
-                            'Estado: ${translateState(item.isActive)}\n'
-                            'Vence día: ${item.dueDay ?? '-'}',
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(item.category ?? 'Sin categoría'),
+                                const SizedBox(height: 6),
+                                Text('Frecuencia: ${translateFrequency(item.frequency)}'),
+                                const SizedBox(height: 6),
+                                Text('Vence día: ${item.dueDay ?? '-'}'),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    AppStatusChip(
+                                      label: item.isActive ? 'Activo' : 'Inactivo',
+                                      color: item.isActive ? Colors.green : Colors.grey,
+                                      icon: item.isActive
+                                          ? Icons.check_circle_outline
+                                          : Icons.pause_circle_outline,
+                                    ),
+                                    AppStatusChip(
+                                      label: item.isMandatory ? 'Obligatorio' : 'Opcional',
+                                      color: item.isMandatory ? Colors.indigo : Colors.orange,
+                                      icon: item.isMandatory
+                                          ? Icons.priority_high_outlined
+                                          : Icons.low_priority_outlined,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
                           Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                formatMoney(item.amount, item.currency),
+                                AppFormatters.money(item.amount, item.currency),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
+                                  fontSize: 16,
                                 ),
                               ),
-                              Text(
-                                item.isMandatory
-                                    ? 'Obligatorio'
-                                    : 'Opcional',
-                                style: const TextStyle(fontSize: 12),
+                              PopupMenuButton<String>(
+                                tooltip: 'Acciones',
+                                onSelected: (value) {
+                                  if (value == 'edit') {
+                                    openEditFixedExpenseDialog(item);
+                                  } else if (value == 'delete') {
+                                    confirmDeleteFixedExpense(item);
+                                  }
+                                },
+                                itemBuilder: (context) => const [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit_outlined, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Editar'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete_outline, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Eliminar'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                icon: const Icon(Icons.more_vert),
                               ),
                             ],
-                          ),
-                          const SizedBox(width: 8),
-                          PopupMenuButton<String>(
-                            tooltip: 'Acciones',
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                openEditFixedExpenseDialog(item);
-                              } else if (value == 'delete') {
-                                confirmDeleteFixedExpense(item);
-                              }
-                            },
-                            itemBuilder: (context) => const [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Editar'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete_outline, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Eliminar'),
-                                  ],
-                                ),
-                              ),
-                            ],
-                            icon: const Icon(Icons.more_vert),
                           ),
                         ],
                       ),

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../models/income_source.dart';
 import '../services/income_source_service.dart';
+import '../utils/app_formatters.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/app_section_header.dart';
+import '../widgets/app_status_chip.dart';
 
 class IncomeSourcesPage extends StatefulWidget {
   const IncomeSourcesPage({super.key});
@@ -30,11 +34,6 @@ class _IncomeSourcesPageState extends State<IncomeSourcesPage> {
     });
   }
 
-  String formatMoney(double value, String currency) {
-    final symbol = currency == 'USD' ? r'$' : 'S/';
-    return '$symbol ${value.toStringAsFixed(2)}';
-  }
-
   String translateType(String value) {
     switch (value) {
       case 'salary':
@@ -56,8 +55,23 @@ class _IncomeSourcesPageState extends State<IncomeSourcesPage> {
     }
   }
 
-  String translateState(bool isActive) {
-    return isActive ? 'Activa' : 'Inactiva';
+  Color typeColor(String value) {
+    switch (value) {
+      case 'salary':
+        return Colors.green;
+      case 'bonus':
+        return Colors.orange;
+      case 'cts':
+        return Colors.blue;
+      case 'vacation':
+        return Colors.teal;
+      case 'freelance':
+        return Colors.deepPurple;
+      case 'business':
+        return Colors.indigo;
+      default:
+        return Colors.grey;
+    }
   }
 
   Future<void> openCreateIncomeSourceDialog() async {
@@ -387,89 +401,114 @@ class _IncomeSourcesPageState extends State<IncomeSourcesPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Fuentes de ingreso',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: openCreateIncomeSourceDialog,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Nueva'),
-                  ),
-                ],
+              AppSectionHeader(
+                title: 'Fuentes de ingreso',
+                subtitle: '${items.length} registradas',
+                action: ElevatedButton.icon(
+                  onPressed: openCreateIncomeSourceDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Nueva'),
+                ),
               ),
               const SizedBox(height: 16),
               if (items.isEmpty)
-                const Text('No hay fuentes de ingreso registradas.')
+                const AppEmptyState(
+                  icon: Icons.attach_money_outlined,
+                  title: 'No hay fuentes de ingreso registradas',
+                  subtitle: 'Agrega una fuente para planificar ingresos del mes.',
+                )
               else
                 ...items.map(
                       (item) => Card(
-                    child: ListTile(
-                      title: Text(item.name),
-                      subtitle: Text(
-                        '${translateType(item.type)}\n'
-                            'Estado: ${translateState(item.isActive)}',
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    AppStatusChip(
+                                      label: translateType(item.type),
+                                      color: typeColor(item.type),
+                                      icon: Icons.label_outline,
+                                    ),
+                                    AppStatusChip(
+                                      label: item.isActive ? 'Activa' : 'Inactiva',
+                                      color: item.isActive ? Colors.green : Colors.grey,
+                                      icon: item.isActive
+                                          ? Icons.check_circle_outline
+                                          : Icons.pause_circle_outline,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
                           Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               if (item.defaultAmount != null)
                                 Text(
-                                  formatMoney(
-                                    item.defaultAmount!,
-                                    item.currency,
-                                  ),
+                                  AppFormatters.money(item.defaultAmount!, item.currency),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 16,
                                   ),
                                 ),
+                              const SizedBox(height: 4),
                               Text(
                                 item.currency,
                                 style: const TextStyle(fontSize: 12),
                               ),
-                            ],
-                          ),
-                          const SizedBox(width: 8),
-                          PopupMenuButton<String>(
-                            tooltip: 'Acciones',
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                openEditIncomeSourceDialog(item);
-                              } else if (value == 'delete') {
-                                confirmDeleteIncomeSource(item);
-                              }
-                            },
-                            itemBuilder: (context) => const [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Editar'),
-                                  ],
-                                ),
+                              PopupMenuButton<String>(
+                                tooltip: 'Acciones',
+                                onSelected: (value) {
+                                  if (value == 'edit') {
+                                    openEditIncomeSourceDialog(item);
+                                  } else if (value == 'delete') {
+                                    confirmDeleteIncomeSource(item);
+                                  }
+                                },
+                                itemBuilder: (context) => const [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit_outlined, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Editar'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete_outline, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Eliminar'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                icon: const Icon(Icons.more_vert),
                               ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete_outline, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Eliminar'),
-                                  ],
-                                ),
-                              ),
                             ],
-                            icon: const Icon(Icons.more_vert),
                           ),
                         ],
                       ),
