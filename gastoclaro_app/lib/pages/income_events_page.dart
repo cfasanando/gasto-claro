@@ -5,6 +5,7 @@ import '../models/income_source.dart';
 import '../services/income_event_service.dart';
 import '../services/income_source_service.dart';
 import '../utils/app_formatters.dart';
+import '../utils/app_validators.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
@@ -54,6 +55,13 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
     setState(() {
       loadItems();
     });
+  }
+
+  InputDecoration dialogInputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+    );
   }
 
   String translateStatus(String value) {
@@ -109,6 +117,8 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
   }
 
   Future<void> openIncomeEventDialog({IncomeEvent? existingEvent}) async {
+    final formKey = GlobalKey<FormState>();
+
     final titleController = TextEditingController(
       text: existingEvent?.title ?? '',
     );
@@ -155,114 +165,124 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
                     : 'Editar evento de ingreso',
               ),
               content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (sources.isNotEmpty)
-                      DropdownButtonFormField<int?>(
-                        value: selectedIncomeSourceId,
-                        decoration: const InputDecoration(
-                          labelText: 'Fuente de ingreso',
-                        ),
-                        items: [
-                          const DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text('Sin fuente'),
-                          ),
-                          ...sources.map(
-                                (source) => DropdownMenuItem<int?>(
-                              value: source.id,
-                              child: Text(source.name),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (sources.isNotEmpty)
+                        DropdownButtonFormField<int?>(
+                          value: selectedIncomeSourceId,
+                          decoration: dialogInputDecoration('Fuente de ingreso'),
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('Sin fuente'),
                             ),
+                            ...sources.map(
+                                  (source) => DropdownMenuItem<int?>(
+                                value: source.id,
+                                child: Text(source.name),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setDialogState(() {
+                              selectedIncomeSourceId = value;
+                            });
+                          },
+                        ),
+                      if (sources.isNotEmpty) const SizedBox(height: 12),
+                      TextFormField(
+                        controller: titleController,
+                        decoration: dialogInputDecoration('Título'),
+                        validator: (value) => AppValidators.requiredText(
+                          value,
+                          label: 'El título',
+                        ),
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: amountController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: dialogInputDecoration('Monto'),
+                        validator: (value) =>
+                            AppValidators.requiredPositiveNumber(
+                              value,
+                              label: 'El monto',
+                              allowZero: false,
+                            ),
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: currency,
+                        decoration: dialogInputDecoration('Moneda'),
+                        items: const [
+                          DropdownMenuItem(value: 'PEN', child: Text('PEN')),
+                          DropdownMenuItem(value: 'USD', child: Text('USD')),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            currency = value ?? 'PEN';
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: expectedDateController,
+                        decoration: dialogInputDecoration('Fecha esperada (YYYY-MM-DD)'),
+                        validator: (value) => AppValidators.requiredDateYmd(
+                          value,
+                          label: 'La fecha esperada',
+                        ),
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: status,
+                        decoration: dialogInputDecoration('Estado'),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'planned',
+                            child: Text('Planificado'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'received',
+                            child: Text('Recibido'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'missed',
+                            child: Text('No recibido'),
                           ),
                         ],
                         onChanged: (value) {
                           setDialogState(() {
-                            selectedIncomeSourceId = value;
+                            status = value ?? 'planned';
                           });
                         },
                       ),
-                    if (sources.isNotEmpty) const SizedBox(height: 12),
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Título',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: amountController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Monto',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: currency,
-                      decoration: const InputDecoration(
-                        labelText: 'Moneda',
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'PEN', child: Text('PEN')),
-                        DropdownMenuItem(value: 'USD', child: Text('USD')),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          currency = value ?? 'PEN';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: expectedDateController,
-                      decoration: const InputDecoration(
-                        labelText: 'Fecha esperada (YYYY-MM-DD)',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: status,
-                      decoration: const InputDecoration(
-                        labelText: 'Estado',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'planned',
-                          child: Text('Planificado'),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: receivedDateController,
+                        decoration: dialogInputDecoration('Fecha recibida (YYYY-MM-DD)'),
+                        validator: (value) => AppValidators.optionalDateYmd(
+                          value,
+                          label: 'La fecha recibida',
                         ),
-                        DropdownMenuItem(
-                          value: 'received',
-                          child: Text('Recibido'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'missed',
-                          child: Text('No recibido'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          status = value ?? 'planned';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: receivedDateController,
-                      decoration: const InputDecoration(
-                        labelText: 'Fecha recibida (YYYY-MM-DD)',
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: notesController,
-                      decoration: const InputDecoration(
-                        labelText: 'Notas',
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: notesController,
+                        decoration: dialogInputDecoration('Notas'),
+                        maxLines: 2,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -271,7 +291,15 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
+                  onPressed: () {
+                    final isValid = formKey.currentState?.validate() ?? false;
+
+                    if (!isValid) {
+                      return;
+                    }
+
+                    Navigator.of(context).pop(true);
+                  },
                   child: const Text('Guardar'),
                 ),
               ],
@@ -287,29 +315,12 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
 
     final amount = double.tryParse(amountController.text.trim());
 
-    if (titleController.text.trim().isEmpty ||
-        amount == null ||
-        amount < 0 ||
-        expectedDateController.text.trim().isEmpty) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Completa título, monto y fecha esperada válidos'),
-        ),
-      );
-
-      return;
-    }
-
     try {
       if (existingEvent == null) {
         await incomeEventService.createIncomeEvent(
           incomeSourceId: selectedIncomeSourceId,
           title: titleController.text.trim(),
-          amount: amount,
+          amount: amount ?? 0,
           currency: currency,
           expectedDate: expectedDateController.text.trim(),
           receivedDate: receivedDateController.text.trim().isEmpty
@@ -325,7 +336,7 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
           id: existingEvent.id,
           incomeSourceId: selectedIncomeSourceId,
           title: titleController.text.trim(),
-          amount: amount,
+          amount: amount ?? 0,
           currency: currency,
           expectedDate: expectedDateController.text.trim(),
           receivedDate: receivedDateController.text.trim().isEmpty

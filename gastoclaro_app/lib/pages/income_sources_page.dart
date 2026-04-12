@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/income_source.dart';
 import '../services/income_source_service.dart';
 import '../utils/app_formatters.dart';
+import '../utils/app_validators.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
@@ -32,6 +33,13 @@ class _IncomeSourcesPageState extends State<IncomeSourcesPage> {
     setState(() {
       loadItems();
     });
+  }
+
+  InputDecoration dialogInputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+    );
   }
 
   String translateType(String value) {
@@ -83,6 +91,8 @@ class _IncomeSourcesPageState extends State<IncomeSourcesPage> {
   }
 
   Future<void> openIncomeSourceDialog({IncomeSource? existingSource}) async {
+    final formKey = GlobalKey<FormState>();
+
     final nameController = TextEditingController(
       text: existingSource?.name ?? '',
     );
@@ -109,102 +119,107 @@ class _IncomeSourcesPageState extends State<IncomeSourcesPage> {
                     : 'Editar fuente de ingreso',
               ),
               content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Nombre',
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: nameController,
+                        decoration: dialogInputDecoration('Nombre'),
+                        validator: (value) => AppValidators.requiredText(
+                          value,
+                          label: 'El nombre',
+                        ),
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: type,
-                      decoration: const InputDecoration(
-                        labelText: 'Tipo',
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: type,
+                        decoration: dialogInputDecoration('Tipo'),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'salary',
+                            child: Text('Sueldo'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'bonus',
+                            child: Text('Bono / gratificación'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'cts',
+                            child: Text('CTS'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'vacation',
+                            child: Text('Vacaciones'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'freelance',
+                            child: Text('Freelance'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'business',
+                            child: Text('Negocio'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'other',
+                            child: Text('Otro'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            type = value ?? 'salary';
+                          });
+                        },
                       ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'salary',
-                          child: Text('Sueldo'),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: defaultAmountController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
                         ),
-                        DropdownMenuItem(
-                          value: 'bonus',
-                          child: Text('Bono / gratificación'),
+                        decoration: dialogInputDecoration('Monto por defecto'),
+                        validator: (value) => AppValidators.optionalNumber(
+                          value,
+                          label: 'El monto por defecto',
+                          allowZero: true,
                         ),
-                        DropdownMenuItem(
-                          value: 'cts',
-                          child: Text('CTS'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'vacation',
-                          child: Text('Vacaciones'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'freelance',
-                          child: Text('Freelance'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'business',
-                          child: Text('Negocio'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'other',
-                          child: Text('Otro'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          type = value ?? 'salary';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: defaultAmountController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                       ),
-                      decoration: const InputDecoration(
-                        labelText: 'Monto por defecto',
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: currency,
+                        decoration: dialogInputDecoration('Moneda'),
+                        items: const [
+                          DropdownMenuItem(value: 'PEN', child: Text('PEN')),
+                          DropdownMenuItem(value: 'USD', child: Text('USD')),
+                        ],
+                        onChanged: (value) {
+                          setDialogState(() {
+                            currency = value ?? 'PEN';
+                          });
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: currency,
-                      decoration: const InputDecoration(
-                        labelText: 'Moneda',
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Está activa'),
+                        value: isActive,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            isActive = value;
+                          });
+                        },
                       ),
-                      items: const [
-                        DropdownMenuItem(value: 'PEN', child: Text('PEN')),
-                        DropdownMenuItem(value: 'USD', child: Text('USD')),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          currency = value ?? 'PEN';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Está activa'),
-                      value: isActive,
-                      onChanged: (value) {
-                        setDialogState(() {
-                          isActive = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: notesController,
-                      decoration: const InputDecoration(
-                        labelText: 'Notas',
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: notesController,
+                        decoration: dialogInputDecoration('Notas'),
+                        maxLines: 2,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -213,7 +228,15 @@ class _IncomeSourcesPageState extends State<IncomeSourcesPage> {
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
+                  onPressed: () {
+                    final isValid = formKey.currentState?.validate() ?? false;
+
+                    if (!isValid) {
+                      return;
+                    }
+
+                    Navigator.of(context).pop(true);
+                  },
                   child: const Text('Guardar'),
                 ),
               ],
@@ -224,20 +247,6 @@ class _IncomeSourcesPageState extends State<IncomeSourcesPage> {
     );
 
     if (confirmed != true) {
-      return;
-    }
-
-    if (nameController.text.trim().isEmpty) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Completa al menos el nombre'),
-        ),
-      );
-
       return;
     }
 
