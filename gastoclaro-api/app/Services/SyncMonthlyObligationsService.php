@@ -1,3 +1,4 @@
+
 <?php
 
 declare(strict_types=1);
@@ -9,6 +10,7 @@ use App\Models\FixedExpense;
 use App\Models\PaymentObligation;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 
 class SyncMonthlyObligationsService
 {
@@ -29,7 +31,7 @@ class SyncMonthlyObligationsService
 
             $dueDate = $this->buildDueDate($year, $month, $expense->due_day);
 
-            [$obligation, $created] = $this->updateOrCreateObligation(
+            $result = $this->syncObligation(
                 userId: (int) $user->id,
                 sourceType: 'fixed_expense',
                 sourceId: (int) $expense->id,
@@ -39,15 +41,16 @@ class SyncMonthlyObligationsService
                     'obligation_type' => 'fixed_expense',
                     'amount_due' => $expense->amount,
                     'currency' => $expense->currency,
-                    'status' => $this->resolveInitialStatus($dueDate),
                     'priority' => $expense->is_mandatory ? 'high' : 'medium',
                     'notes' => $expense->notes,
                 ],
             );
 
-            if ($created) {
+            if ($result['created']) {
                 $createdCount++;
-            } elseif ($obligation->wasChanged()) {
+            }
+
+            if ($result['updated']) {
                 $updatedCount++;
             }
         }
@@ -69,7 +72,7 @@ class SyncMonthlyObligationsService
 
             $dueDate = $this->buildDueDate($year, $month, $debt->due_day);
 
-            [$obligation, $created] = $this->updateOrCreateObligation(
+            $result = $this->syncObligation(
                 userId: (int) $user->id,
                 sourceType: 'debt',
                 sourceId: (int) $debt->id,
@@ -81,15 +84,16 @@ class SyncMonthlyObligationsService
                         : 'minimum_payment',
                     'amount_due' => $amountDue,
                     'currency' => $debt->currency,
-                    'status' => $this->resolveInitialStatus($dueDate),
                     'priority' => 'high',
                     'notes' => $debt->notes,
                 ],
             );
 
-            if ($created) {
+            if ($result['created']) {
                 $createdCount++;
-            } elseif ($obligation->wasChanged()) {
+            }
+
+            if ($result['updated']) {
                 $updatedCount++;
             }
         }
@@ -102,24 +106,69 @@ class SyncMonthlyObligationsService
         ];
     }
 
-    private function updateOrCreateObligation(
+    private function syncObligation(
         int $userId,
         string $sourceType,
         int $sourceId,
         Carbon $dueDate,
         array $values,
     ): array {
-        $obligation = PaymentObligation::query()->updateOrCreate(
-            [
-                'user_id' => $userId,
-                'source_type' => $sourceType,
-                'source_id' => $sourceId,
-                'due_date' => $dueDate->toDateString(),
-            ],
-            $values
-        );
+        $attributes = [
+            'user_id' => $userId,
+            'source_type' => $sourceType,
+            'source_id' => $sourceId,
+            'due_date' => $dueDate->toDateString(),
+        ];
 
-        return [$obligation, $obligation->wasRecentlyCreated];
+        $existing = PaymentObligation::query()
+            ->where($attributes)
+            ->first();
+
+        if ($existing) {
+            return $this->updateExistingObligation($existing, $dueDate, $values);
+        }
+
+        try {
+            PaymentObligation::query()->create([
+                ...$attributes,
+                ...$values,
+                'status' => $this->resolveInitialStatus($dueDate),
+            ]);
+
+            return [
+                'created' => true,
+                'updated' => false,
+            ];
+        } catch (QueryException) {
+            $existing = PaymentObligation::query()
+                ->where($attributes)
+                ->firstOrFail();
+
+            return $this->updateExistingObligation($existing, $dueDate, $values);
+        }
+    }
+
+    private function updateExistingObligation(
+        PaymentObligation $obligation,
+        Carbon $dueDate,
+        array $values,
+    ): array {
+        $obligation->fill($values);
+
+        if (!in_array($obligation->status, ['paid', 'partial', 'cancelled'], true)) {
+            $obligation->status = $this->resolveInitialStatus($dueDate);
+        }
+
+        $updated = $obligation->isDirty();
+
+        if ($updated) {
+            $obligation->save();
+        }
+
+        return [
+            'created' => false,
+            'updated' => $updated,
+        ];
     }
 
     private function buildDueDate(int $year, int $month, int $dueDay): Carbon
