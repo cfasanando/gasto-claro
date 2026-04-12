@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Models\Debt;
-use App\Models\FixedExpense;
 use App\Models\IncomeEvent;
+use App\Models\PaymentObligation;
+use App\Models\PaymentRecord;
 use App\Models\User;
 use Carbon\Carbon;
 
@@ -17,7 +17,7 @@ class MonthlyDashboardService
         $selectedMonth = Carbon::create($year, $month, 1)->startOfMonth();
         $startDate = $selectedMonth->copy()->startOfMonth();
         $endDate = $selectedMonth->copy()->endOfMonth();
-        $today = now();
+        $today = now()->startOfDay();
 
         $incomeEvents = $user->incomeEvents()
             ->with('incomeSource:id,name,type')
@@ -29,17 +29,23 @@ class MonthlyDashboardService
             ->orderBy('title')
             ->get();
 
-        $fixedExpenses = $user->fixedExpenses()
-            ->where('is_active', true)
-            ->where('frequency', 'monthly')
-            ->orderBy('due_day')
-            ->orderBy('name')
+        $paymentObligations = $user->paymentObligations()
+            ->whereBetween('due_date', [
+                $startDate->toDateString(),
+                $endDate->toDateString(),
+            ])
+            ->orderBy('due_date')
+            ->orderBy('title')
             ->get();
 
-        $debts = $user->debts()
-            ->where('status', 'active')
-            ->orderBy('due_day')
-            ->orderBy('name')
+        $paymentRecords = $user->paymentRecords()
+            ->with('paymentObligation:id,title,due_date,status')
+            ->whereBetween('paid_at', [
+                $startDate->toDateString(),
+                $endDate->toDateString(),
+            ])
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
             ->get();
 
         $expectedIncomeTotal = round(
@@ -70,135 +76,104 @@ class MonthlyDashboardService
             2
         );
 
-        $fixedExpenseTotal = round(
-            $fixedExpenses->sum(fn (FixedExpense $expense): float => (float) $expense->amount),
+        $obligationTotal = round(
+            $paymentObligations->sum(fn (PaymentObligation $obligation): float => (float) $obligation->amount_due),
             2
         );
 
-        $debtDueTotal = round(
-            $debts->sum(fn (Debt $debt): float => $this->resolveDebtDueAmount($debt)),
+        $paidTotal = round(
+            $paymentRecords->sum(fn (PaymentRecord $record): float => (float) $record->paid_amount),
             2
         );
 
-        $obligationItems = collect();
-
-        foreach ($fixedExpenses as $expense) {
-            $dueDate = $this->buildDueDate($year, $month, $expense->due_day);
-
-            $obligationItems->push([
-                'source_type' => 'fixed_expense',
-                'source_id' => $expense->id,
-                'title' => $expense->name,
-                'amount' => (float) $expense->amount,
-                'currency' => $expense->currency,
-                'due_day' => $expense->due_day,
-                'due_date' => $dueDate?->toDateString(),
-                'schedule_status' => $this->buildScheduleStatus($selectedMonth, $today, $expense->due_day),
-            ]);
-        }
-
-        foreach ($debts as $debt) {
-            $amountDue = $this->resolveDebtDueAmount($debt);
-
-            if ($amountDue <= 0) {
-                continue;
-            }
-
-            $dueDate = $this->buildDueDate($year, $month, $debt->due_day);
-
-            $obligationItems->push([
-                'source_type' => 'debt',
-                'source_id' => $debt->id,
-                'title' => $debt->name,
-                'amount' => $amountDue,
-                'currency' => $debt->currency,
-                'due_day' => $debt->due_day,
-                'due_date' => $dueDate?->toDateString(),
-                'schedule_status' => $this->buildScheduleStatus($selectedMonth, $today, $debt->due_day),
-            ]);
-        }
-
-        $obligationItems = $obligationItems
-            ->sortBy([
-                ['due_day', 'asc'],
-                ['title', 'asc'],
-            ])
-            ->values();
-
-        $upcomingItems = $obligationItems
-            ->filter(fn (array $item): bool => in_array($item['schedule_status'], ['scheduled', 'due_soon'], true))
-            ->values();
-
-        $attentionItems = $obligationItems
-            ->filter(fn (array $item): bool => $item['schedule_status'] === 'attention')
-            ->values();
-
-        $obligationTotal = round($fixedExpenseTotal + $debtDueTotal, 2);
+        $remainingObligationTotal = round(max(0, $obligationTotal - $paidTotal), 2);
         $projectedBalance = round($expectedIncomeTotal - $obligationTotal, 2);
+        $actualBalance = round($receivedIncomeTotal - $paidTotal, 2);
+
+        $upcomingItems = $paymentObligations
+            ->filter(function (PaymentObligation $obligation) use ($selectedMonth, $today): bool {
+                if (in_array($obligation->status, ['paid', 'cancelled'], true)) {
+                    return false;
+                }
+
+                $isCurrentMonth = $selectedMonth->year === $today->year
+                    && $selectedMonth->month === $today->month;
+
+                if (!$isCurrentMonth) {
+                    return true;
+                }
+
+                return $obligation->due_date->greaterThanOrEqualTo($today);
+            })
+            ->map(fn (PaymentObligation $obligation): array => $this->mapObligation($obligation))
+            ->values();
+
+        $attentionItems = $paymentObligations
+            ->filter(function (PaymentObligation $obligation) use ($selectedMonth, $today): bool {
+                if (in_array($obligation->status, ['paid', 'cancelled'], true)) {
+                    return false;
+                }
+
+                if (in_array($obligation->status, ['overdue', 'partial'], true)) {
+                    return true;
+                }
+
+                $isCurrentMonth = $selectedMonth->year === $today->year
+                    && $selectedMonth->month === $today->month;
+
+                if (!$isCurrentMonth) {
+                    return false;
+                }
+
+                return $obligation->due_date->lessThan($today);
+            })
+            ->map(fn (PaymentObligation $obligation): array => $this->mapObligation($obligation))
+            ->values();
+
+        $paidItems = $paymentObligations
+            ->where('status', 'paid')
+            ->map(fn (PaymentObligation $obligation): array => $this->mapObligation($obligation))
+            ->values();
+
+        $pendingItems = $paymentObligations
+            ->filter(fn (PaymentObligation $obligation): bool => in_array($obligation->status, ['pending', 'partial', 'overdue'], true))
+            ->map(fn (PaymentObligation $obligation): array => $this->mapObligation($obligation))
+            ->values();
 
         return [
             'selected_month' => $selectedMonth->format('Y-m'),
             'expected_income_total' => $expectedIncomeTotal,
             'received_income_total' => $receivedIncomeTotal,
-            'fixed_expense_total' => $fixedExpenseTotal,
-            'debt_due_total' => $debtDueTotal,
             'obligation_total' => $obligationTotal,
+            'paid_total' => $paidTotal,
+            'remaining_obligation_total' => $remainingObligationTotal,
             'projected_balance' => $projectedBalance,
-            'fixed_expenses_count' => $fixedExpenses->count(),
-            'debts_count' => $debts->count(),
+            'actual_balance' => $actualBalance,
+            'payment_obligations_count' => $paymentObligations->count(),
+            'payment_records_count' => $paymentRecords->count(),
             'income_events_count' => $incomeEvents->count(),
             'upcoming_items' => $upcomingItems,
             'attention_items' => $attentionItems,
-            'dashboard_note' => 'Schedule-based alerts only. Payment confirmation will be added with payment records.',
+            'paid_items' => $paidItems,
+            'pending_items' => $pendingItems,
+            'dashboard_note' => 'Monthly dashboard now reflects obligations and recorded payments.',
         ];
     }
 
-    private function resolveDebtDueAmount(Debt $debt): float
+    private function mapObligation(PaymentObligation $obligation): array
     {
-        if ($debt->monthly_due_amount !== null) {
-            return (float) $debt->monthly_due_amount;
-        }
-
-        if ($debt->minimum_payment !== null) {
-            return (float) $debt->minimum_payment;
-        }
-
-        return 0.0;
-    }
-
-    private function buildDueDate(int $year, int $month, ?int $dueDay): ?Carbon
-    {
-        if ($dueDay === null) {
-            return null;
-        }
-
-        $lastDayOfMonth = Carbon::create($year, $month, 1)->endOfMonth()->day;
-        $safeDay = min($dueDay, $lastDayOfMonth);
-
-        return Carbon::create($year, $month, $safeDay)->startOfDay();
-    }
-
-    private function buildScheduleStatus(Carbon $selectedMonth, Carbon $today, ?int $dueDay): string
-    {
-        if ($dueDay === null) {
-            return 'no_due_day';
-        }
-
-        $isCurrentMonth = $selectedMonth->year === $today->year
-            && $selectedMonth->month === $today->month;
-
-        if (!$isCurrentMonth) {
-            return 'scheduled';
-        }
-
-        if ($dueDay < $today->day) {
-            return 'attention';
-        }
-
-        if ($dueDay <= ($today->day + 7)) {
-            return 'due_soon';
-        }
-
-        return 'scheduled';
+        return [
+            'id' => $obligation->id,
+            'source_type' => $obligation->source_type,
+            'source_id' => $obligation->source_id,
+            'title' => $obligation->title,
+            'obligation_type' => $obligation->obligation_type,
+            'amount_due' => (float) $obligation->amount_due,
+            'currency' => $obligation->currency,
+            'due_date' => $obligation->due_date?->toDateString(),
+            'status' => $obligation->status,
+            'priority' => $obligation->priority,
+            'notes' => $obligation->notes,
+        ];
     }
 }
