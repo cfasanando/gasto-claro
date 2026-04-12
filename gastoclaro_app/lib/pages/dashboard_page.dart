@@ -2,15 +2,23 @@ import 'package:flutter/material.dart';
 
 import '../models/monthly_dashboard.dart';
 import '../services/dashboard_service.dart';
+import '../services/payment_obligation_service.dart';
+import '../utils/app_formatters.dart';
 
 class DashboardPage extends StatefulWidget {
   final int year;
   final int month;
+  final VoidCallback? onOpenObligations;
+  final VoidCallback? onOpenPayments;
+  final VoidCallback? onOpenIncomeEvents;
 
   const DashboardPage({
     super.key,
     required this.year,
     required this.month,
+    this.onOpenObligations,
+    this.onOpenPayments,
+    this.onOpenIncomeEvents,
   });
 
   @override
@@ -20,6 +28,10 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   late Future<MonthlyDashboard> futureDashboard;
   final DashboardService dashboardService = DashboardService();
+  final PaymentObligationService paymentObligationService =
+  PaymentObligationService();
+
+  bool isSyncing = false;
 
   @override
   void initState() {
@@ -43,14 +55,55 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void reload() {
+  Future<void> reload() async {
     setState(() {
       loadDashboard();
     });
   }
 
-  String formatMoney(double value) {
-    return 'S/ ${value.toStringAsFixed(2)}';
+  Future<void> syncMonthlyObligations() async {
+    if (isSyncing) {
+      return;
+    }
+
+    setState(() {
+      isSyncing = true;
+    });
+
+    try {
+      await paymentObligationService.syncMonthly(
+        year: widget.year,
+        month: widget.month,
+      );
+
+      await reload();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Obligaciones sincronizadas correctamente'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo sincronizar: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSyncing = false;
+        });
+      }
+    }
   }
 
   @override
@@ -106,81 +159,150 @@ class _DashboardPageState extends State<DashboardPage> {
         final dashboard = snapshot.data!;
 
         return RefreshIndicator(
-          onRefresh: () async => reload(),
+          onRefresh: reload,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _SummaryCard(
-                title: 'Mes seleccionado',
-                value: dashboard.selectedMonth,
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_month_outlined, size: 32),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Resumen del periodo',
+                              style: TextStyle(
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              AppFormatters.monthYear(widget.year, widget.month),
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: isSyncing ? null : syncMonthlyObligations,
+                    icon: isSyncing
+                        ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                        : const Icon(Icons.sync),
+                    label: Text(
+                      isSyncing ? 'Sincronizando...' : 'Sincronizar',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: widget.onOpenObligations,
+                    icon: const Icon(Icons.receipt_long_outlined),
+                    label: const Text('Ver obligaciones'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: widget.onOpenPayments,
+                    icon: const Icon(Icons.payments_outlined),
+                    label: const Text('Ver pagos'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: widget.onOpenIncomeEvents,
+                    icon: const Icon(Icons.event_note_outlined),
+                    label: const Text('Ver eventos'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
               _SummaryCard(
                 title: 'Ingreso esperado',
-                value: formatMoney(dashboard.expectedIncomeTotal),
+                value: AppFormatters.money(dashboard.expectedIncomeTotal),
+                icon: Icons.trending_up,
               ),
               const SizedBox(height: 12),
               _SummaryCard(
                 title: 'Ingreso recibido',
-                value: formatMoney(dashboard.receivedIncomeTotal),
+                value: AppFormatters.money(dashboard.receivedIncomeTotal),
+                icon: Icons.savings_outlined,
               ),
               const SizedBox(height: 12),
               _SummaryCard(
                 title: 'Obligaciones del mes',
-                value: formatMoney(dashboard.obligationTotal),
+                value: AppFormatters.money(dashboard.obligationTotal),
+                icon: Icons.account_balance_wallet_outlined,
               ),
               const SizedBox(height: 12),
               _SummaryCard(
                 title: 'Total pagado',
-                value: formatMoney(dashboard.paidTotal),
+                value: AppFormatters.money(dashboard.paidTotal),
+                icon: Icons.check_circle_outline,
               ),
               const SizedBox(height: 12),
               _SummaryCard(
                 title: 'Pendiente por pagar',
-                value: formatMoney(dashboard.remainingObligationTotal),
-                isNegative: dashboard.remainingObligationTotal > 0,
-              ),
-              const SizedBox(height: 12),
-              _SummaryCard(
-                title: 'Balance proyectado',
-                value: formatMoney(dashboard.projectedBalance),
-                isNegative: dashboard.projectedBalance < 0,
+                value: AppFormatters.money(dashboard.remainingObligationTotal),
+                icon: Icons.warning_amber_outlined,
+                isAlert: dashboard.remainingObligationTotal > 0,
               ),
               const SizedBox(height: 12),
               _SummaryCard(
                 title: 'Balance real',
-                value: formatMoney(dashboard.actualBalance),
-                isNegative: dashboard.actualBalance < 0,
+                value: AppFormatters.money(dashboard.actualBalance),
+                icon: Icons.pie_chart_outline,
+                isAlert: dashboard.actualBalance < 0,
               ),
               const SizedBox(height: 24),
-              Text(
-                'Requieren atención',
-                style: Theme.of(context).textTheme.titleLarge,
+              _SectionTitle(
+                title: 'Requieren atención',
+                count: dashboard.attentionItems.length,
               ),
               const SizedBox(height: 8),
               if (dashboard.attentionItems.isEmpty)
                 const Text('No hay elementos en atención.')
               else
                 ...dashboard.attentionItems.map(
-                      (item) => _DashboardItemTile(
-                    item: item,
-                    amountKey: 'amount_due',
-                  ),
+                      (item) => _DashboardItemCard(item: item),
                 ),
               const SizedBox(height: 24),
-              Text(
-                'Pagados',
-                style: Theme.of(context).textTheme.titleLarge,
+              _SectionTitle(
+                title: 'Pendientes',
+                count: dashboard.pendingItems.length,
+              ),
+              const SizedBox(height: 8),
+              if (dashboard.pendingItems.isEmpty)
+                const Text('No hay elementos pendientes.')
+              else
+                ...dashboard.pendingItems.map(
+                      (item) => _DashboardItemCard(item: item),
+                ),
+              const SizedBox(height: 24),
+              _SectionTitle(
+                title: 'Pagados',
+                count: dashboard.paidItems.length,
               ),
               const SizedBox(height: 8),
               if (dashboard.paidItems.isEmpty)
-                const Text('No hay pagos completados.')
+                const Text('No hay elementos pagados.')
               else
                 ...dashboard.paidItems.map(
-                      (item) => _DashboardItemTile(
-                    item: item,
-                    amountKey: 'amount_due',
-                  ),
+                      (item) => _DashboardItemCard(item: item),
                 ),
               const SizedBox(height: 24),
               Card(
@@ -203,25 +325,33 @@ class _DashboardPageState extends State<DashboardPage> {
 class _SummaryCard extends StatelessWidget {
   final String title;
   final String value;
-  final bool isNegative;
+  final IconData icon;
+  final bool isAlert;
 
   const _SummaryCard({
     required this.title,
     required this.value,
-    this.isNegative = false,
+    required this.icon,
+    this.isAlert = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
       child: ListTile(
+        leading: Icon(
+          icon,
+          color: isAlert ? Colors.red : colorScheme.primary,
+        ),
         title: Text(title),
         subtitle: Text(
           value,
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: isNegative ? Colors.red : null,
+            color: isAlert ? Colors.red : null,
           ),
         ),
       ),
@@ -229,60 +359,95 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _DashboardItemTile extends StatelessWidget {
-  final Map<String, dynamic> item;
-  final String amountKey;
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  final int count;
 
-  const _DashboardItemTile({
-    required this.item,
-    required this.amountKey,
+  const _SectionTitle({
+    required this.title,
+    required this.count,
   });
 
-  String formatMoney(dynamic value) {
-    final parsed = double.tryParse(value.toString()) ?? 0;
-    return 'S/ ${parsed.toStringAsFixed(2)}';
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          ),
+          child: Text(count.toString()),
+        ),
+      ],
+    );
   }
+}
 
-  String translateStatus(String? status) {
+class _DashboardItemCard extends StatelessWidget {
+  final Map<String, dynamic> item;
+
+  const _DashboardItemCard({
+    required this.item,
+  });
+
+  Color _statusColor(String status) {
     switch (status) {
       case 'paid':
-        return 'Pagado';
+        return Colors.green;
       case 'partial':
-        return 'Parcial';
-      case 'pending':
-        return 'Pendiente';
+        return Colors.orange;
       case 'overdue':
-        return 'Vencido';
-      case 'cancelled':
-        return 'Cancelado';
+        return Colors.red;
+      case 'pending':
+        return Colors.blueGrey;
       default:
-        return status ?? '-';
+        return Colors.grey;
     }
-  }
-
-  String formatDate(String? value) {
-    if (value == null || value.isEmpty) {
-      return '-';
-    }
-
-    if (value.length >= 10) {
-      return value.substring(0, 10);
-    }
-
-    return value;
   }
 
   @override
   Widget build(BuildContext context) {
+    final status = item['status']?.toString() ?? '';
+    final color = _statusColor(status);
+
     return Card(
       child: ListTile(
         title: Text(item['title']?.toString() ?? ''),
-        subtitle: Text(
-          'Vence: ${formatDate(item['due_date']?.toString())}\n'
-              'Estado: ${translateStatus(item['status']?.toString())}',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text('Vence: ${AppFormatters.date(item['due_date'])}'),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                color: color.withValues(alpha: 0.12),
+              ),
+              child: Text(
+                AppFormatters.obligationStatus(status),
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
         trailing: Text(
-          formatMoney(item[amountKey]),
+          AppFormatters.money(
+            (item['amount_due'] as num?) ?? 0,
+            item['currency']?.toString() ?? 'PEN',
+          ),
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),

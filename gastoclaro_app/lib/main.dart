@@ -186,10 +186,22 @@ class _HomePageState extends State<HomePage> {
     return '${monthNames[month - 1]} $year';
   }
 
+  void openTab(int index) {
+    setState(() {
+      currentIndex = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
-      DashboardPage(year: year, month: month),
+      DashboardPage(
+        year: year,
+        month: month,
+        onOpenObligations: () => openTab(1),
+        onOpenPayments: () => openTab(2),
+        onOpenIncomeEvents: () => openTab(6),
+      ),
       PaymentObligationsPage(year: year, month: month),
       PaymentRecordsPage(year: year, month: month),
       const DebtsPage(),
