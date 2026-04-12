@@ -13,6 +13,7 @@ use App\Models\FixedExpense;
 use App\Models\IncomeSource;
 use App\Models\IncomeEvent;
 use App\Models\PaymentObligation;
+use App\Models\PaymentRecord;
 
 class User extends Authenticatable
 {
@@ -60,5 +61,10 @@ class User extends Authenticatable
     public function paymentObligations(): HasMany
     {
         return $this->hasMany(PaymentObligation::class);
+    }
+
+    public function paymentRecords(): HasMany
+    {
+        return $this->hasMany(PaymentRecord::class);
     }
 }
