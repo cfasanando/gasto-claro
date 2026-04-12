@@ -41,6 +41,21 @@ class _HomePageState extends State<HomePage> {
   late int year;
   late int month;
 
+  static const List<String> monthNames = [
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Setiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +63,127 @@ class _HomePageState extends State<HomePage> {
     final now = DateTime.now();
     year = now.year;
     month = now.month;
+  }
+
+  bool get pageUsesMonth {
+    return currentIndex == 0 ||
+        currentIndex == 1 ||
+        currentIndex == 2 ||
+        currentIndex == 6;
+  }
+
+  void goToPreviousMonth() {
+    setState(() {
+      if (month == 1) {
+        month = 12;
+        year--;
+      } else {
+        month--;
+      }
+    });
+  }
+
+  void goToNextMonth() {
+    setState(() {
+      if (month == 12) {
+        month = 1;
+        year++;
+      } else {
+        month++;
+      }
+    });
+  }
+
+  Future<void> openMonthPickerDialog() async {
+    int tempYear = year;
+    int tempMonth = month;
+
+    final selected = await showDialog<Map<String, int>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Seleccionar mes'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<int>(
+                    value: tempMonth,
+                    decoration: const InputDecoration(
+                      labelText: 'Mes',
+                    ),
+                    items: List.generate(
+                      12,
+                          (index) => DropdownMenuItem<int>(
+                        value: index + 1,
+                        child: Text(monthNames[index]),
+                      ),
+                    ),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        tempMonth = value ?? tempMonth;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int>(
+                    value: tempYear,
+                    decoration: const InputDecoration(
+                      labelText: 'Año',
+                    ),
+                    items: List.generate(
+                      11,
+                          (index) {
+                        final value = DateTime.now().year - 5 + index;
+
+                        return DropdownMenuItem<int>(
+                          value: value,
+                          child: Text(value.toString()),
+                        );
+                      },
+                    ),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        tempYear = value ?? tempYear;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop({
+                      'year': tempYear,
+                      'month': tempMonth,
+                    });
+                  },
+                  child: const Text('Aplicar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (selected == null) {
+      return;
+    }
+
+    setState(() {
+      year = selected['year'] ?? year;
+      month = selected['month'] ?? month;
+    });
+  }
+
+  String get currentMonthLabel {
+    return '${monthNames[month - 1]} $year';
   }
 
   @override
@@ -75,6 +211,40 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(titles[currentIndex]),
+        actions: pageUsesMonth
+            ? [
+          IconButton(
+            onPressed: goToPreviousMonth,
+            icon: const Icon(Icons.chevron_left),
+            tooltip: 'Mes anterior',
+          ),
+          Center(
+            child: InkWell(
+              onTap: openMonthPickerDialog,
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  currentMonthLabel,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: openMonthPickerDialog,
+            icon: const Icon(Icons.calendar_month_outlined),
+            tooltip: 'Elegir mes',
+          ),
+          IconButton(
+            onPressed: goToNextMonth,
+            icon: const Icon(Icons.chevron_right),
+            tooltip: 'Mes siguiente',
+          ),
+        ]
+            : null,
       ),
       body: IndexedStack(
         index: currentIndex,

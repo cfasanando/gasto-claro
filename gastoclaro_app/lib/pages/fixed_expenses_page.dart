@@ -53,16 +53,34 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
   }
 
   Future<void> openCreateFixedExpenseDialog() async {
-    final nameController = TextEditingController();
-    final categoryController = TextEditingController();
-    final amountController = TextEditingController();
-    final dueDayController = TextEditingController();
-    final notesController = TextEditingController();
+    await openFixedExpenseDialog();
+  }
 
-    String currency = 'PEN';
-    String frequency = 'monthly';
-    bool isMandatory = true;
-    bool isActive = true;
+  Future<void> openEditFixedExpenseDialog(FixedExpense expense) async {
+    await openFixedExpenseDialog(existingExpense: expense);
+  }
+
+  Future<void> openFixedExpenseDialog({FixedExpense? existingExpense}) async {
+    final nameController = TextEditingController(
+      text: existingExpense?.name ?? '',
+    );
+    final categoryController = TextEditingController(
+      text: existingExpense?.category ?? '',
+    );
+    final amountController = TextEditingController(
+      text: existingExpense?.amount.toStringAsFixed(2) ?? '',
+    );
+    final dueDayController = TextEditingController(
+      text: existingExpense?.dueDay?.toString() ?? '',
+    );
+    final notesController = TextEditingController(
+      text: existingExpense?.notes ?? '',
+    );
+
+    String currency = existingExpense?.currency ?? 'PEN';
+    String frequency = existingExpense?.frequency ?? 'monthly';
+    bool isMandatory = existingExpense?.isMandatory ?? true;
+    bool isActive = existingExpense?.isActive ?? true;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -70,7 +88,11 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Nuevo gasto fijo'),
+              title: Text(
+                existingExpense == null
+                    ? 'Nuevo gasto fijo'
+                    : 'Editar gasto fijo',
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -91,7 +113,9 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
                         labelText: 'Monto',
                       ),
@@ -127,9 +151,18 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
                         labelText: 'Frecuencia',
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'monthly', child: Text('Mensual')),
-                        DropdownMenuItem(value: 'weekly', child: Text('Semanal')),
-                        DropdownMenuItem(value: 'yearly', child: Text('Anual')),
+                        DropdownMenuItem(
+                          value: 'monthly',
+                          child: Text('Mensual'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'weekly',
+                          child: Text('Semanal'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'yearly',
+                          child: Text('Anual'),
+                        ),
                       ],
                       onChanged: (value) {
                         setDialogState(() {
@@ -205,21 +238,40 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
     }
 
     try {
-      await fixedExpenseService.createFixedExpense(
-        name: nameController.text.trim(),
-        category: categoryController.text.trim().isEmpty
-            ? null
-            : categoryController.text.trim(),
-        amount: amount,
-        currency: currency,
-        dueDay: int.tryParse(dueDayController.text.trim()),
-        frequency: frequency,
-        isMandatory: isMandatory,
-        isActive: isActive,
-        notes: notesController.text.trim().isEmpty
-            ? null
-            : notesController.text.trim(),
-      );
+      if (existingExpense == null) {
+        await fixedExpenseService.createFixedExpense(
+          name: nameController.text.trim(),
+          category: categoryController.text.trim().isEmpty
+              ? null
+              : categoryController.text.trim(),
+          amount: amount,
+          currency: currency,
+          dueDay: int.tryParse(dueDayController.text.trim()),
+          frequency: frequency,
+          isMandatory: isMandatory,
+          isActive: isActive,
+          notes: notesController.text.trim().isEmpty
+              ? null
+              : notesController.text.trim(),
+        );
+      } else {
+        await fixedExpenseService.updateFixedExpense(
+          id: existingExpense.id,
+          name: nameController.text.trim(),
+          category: categoryController.text.trim().isEmpty
+              ? null
+              : categoryController.text.trim(),
+          amount: amount,
+          currency: currency,
+          dueDay: int.tryParse(dueDayController.text.trim()),
+          frequency: frequency,
+          isMandatory: isMandatory,
+          isActive: isActive,
+          notes: notesController.text.trim().isEmpty
+              ? null
+              : notesController.text.trim(),
+        );
+      }
 
       await reload();
 
@@ -228,8 +280,12 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Gasto fijo creado correctamente'),
+        SnackBar(
+          content: Text(
+            existingExpense == null
+                ? 'Gasto fijo creado correctamente'
+                : 'Gasto fijo actualizado correctamente',
+          ),
         ),
       );
     } catch (e) {
@@ -239,7 +295,62 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo crear el gasto fijo: $e'),
+          content: Text(
+            existingExpense == null
+                ? 'No se pudo crear el gasto fijo: $e'
+                : 'No se pudo actualizar el gasto fijo: $e',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> confirmDeleteFixedExpense(FixedExpense expense) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Eliminar gasto fijo'),
+          content: Text('¿Deseas eliminar "${expense.name}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await fixedExpenseService.deleteFixedExpense(expense.id);
+      await reload();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gasto fijo eliminado correctamente'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo eliminar el gasto fijo: $e'),
         ),
       );
     }
@@ -325,17 +436,60 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
                             'Estado: ${translateState(item.isActive)}\n'
                             'Vence día: ${item.dueDay ?? '-'}',
                       ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            formatMoney(item.amount, item.currency),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                formatMoney(item.amount, item.currency),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                item.isMandatory
+                                    ? 'Obligatorio'
+                                    : 'Opcional',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
                           ),
-                          Text(
-                            item.isMandatory ? 'Obligatorio' : 'Opcional',
-                            style: const TextStyle(fontSize: 12),
+                          const SizedBox(width: 8),
+                          PopupMenuButton<String>(
+                            tooltip: 'Acciones',
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                openEditFixedExpenseDialog(item);
+                              } else if (value == 'delete') {
+                                confirmDeleteFixedExpense(item);
+                              }
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Editar'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Eliminar'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            icon: const Icon(Icons.more_vert),
                           ),
                         ],
                       ),

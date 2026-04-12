@@ -74,4 +74,67 @@ class FixedExpenseService {
       );
     }
   }
+
+  Future<void> updateFixedExpense({
+    required int id,
+    required String name,
+    String? category,
+    required double amount,
+    required String currency,
+    int? dueDay,
+    required String frequency,
+    required bool isMandatory,
+    required bool isActive,
+    String? notes,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/fixed-expenses/$id');
+
+    final response = await http.put(
+      uri,
+      headers: const {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'name': name,
+        'category': category,
+        'amount': amount,
+        'currency': currency,
+        'due_day': dueDay,
+        'frequency': frequency,
+        'is_mandatory': isMandatory,
+        'is_active': isActive,
+        'notes': notes,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to update fixed expense. '
+            'Status: ${response.statusCode}. '
+            'Body: ${response.body}',
+      );
+    }
+  }
+
+  Future<void> deleteFixedExpense(int id) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/fixed-expenses/$id');
+
+    final response = await http.delete(
+      uri,
+      headers: const {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${ApiAuth.bearerToken}',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to delete fixed expense. '
+            'Status: ${response.statusCode}. '
+            'Body: ${response.body}',
+      );
+    }
+  }
 }
