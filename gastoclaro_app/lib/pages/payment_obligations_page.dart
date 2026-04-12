@@ -22,6 +22,7 @@ class _PaymentObligationsPageState extends State<PaymentObligationsPage> {
   late Future<List<PaymentObligation>> futureItems;
   final PaymentObligationService obligationService = PaymentObligationService();
   final PaymentRecordService paymentRecordService = PaymentRecordService();
+  bool isSyncing = false;
 
   @override
   void initState() {
@@ -84,6 +85,14 @@ class _PaymentObligationsPageState extends State<PaymentObligationsPage> {
   }
 
   Future<void> syncMonthly() async {
+    if (isSyncing) {
+      return;
+    }
+
+    setState(() {
+      isSyncing = true;
+    });
+
     try {
       await obligationService.syncMonthly(
         year: widget.year,
@@ -111,6 +120,12 @@ class _PaymentObligationsPageState extends State<PaymentObligationsPage> {
           content: Text('No se pudo sincronizar: $e'),
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSyncing = false;
+        });
+      }
     }
   }
 
@@ -304,9 +319,15 @@ class _PaymentObligationsPageState extends State<PaymentObligationsPage> {
                     ),
                   ),
                   ElevatedButton.icon(
-                    onPressed: syncMonthly,
-                    icon: const Icon(Icons.sync),
-                    label: const Text('Sincronizar'),
+                    onPressed: isSyncing ? null : syncMonthly,
+                    icon: isSyncing
+                        ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                        : const Icon(Icons.sync),
+                    label: Text(isSyncing ? 'Sincronizando...' : 'Sincronizar'),
                   ),
                 ],
               ),

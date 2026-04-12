@@ -43,7 +43,7 @@ class PaymentObligationService {
     required int month,
   }) async {
     final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/payment-obligations/sync-monthly?year=$year&month=$month',
+      '${ApiConfig.baseUrl}/sync-monthly-obligations?year=$year&month=$month',
     );
 
     final response = await http.post(

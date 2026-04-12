@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'pages/dashboard_page.dart';
 import 'pages/debts_page.dart';
+import 'pages/fixed_expenses_page.dart';
 import 'pages/payment_obligations_page.dart';
 import 'pages/payment_records_page.dart';
 
@@ -54,6 +55,7 @@ class _HomePageState extends State<HomePage> {
       PaymentObligationsPage(year: year, month: month),
       PaymentRecordsPage(year: year, month: month),
       const DebtsPage(),
+      const FixedExpensesPage(),
     ];
 
     final titles = [
@@ -61,6 +63,7 @@ class _HomePageState extends State<HomePage> {
       'Obligaciones',
       'Pagos',
       'Deudas',
+      'Gastos fijos',
     ];
 
     return Scaffold(
@@ -95,6 +98,10 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(
             icon: Icon(Icons.account_balance_wallet_outlined),
             label: 'Deudas',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_work_outlined),
+            label: 'Gastos',
           ),
         ],
       ),
