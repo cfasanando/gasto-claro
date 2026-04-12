@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/debts_page.dart';
 import 'pages/fixed_expenses_page.dart';
+import 'pages/income_events_page.dart';
 import 'pages/income_sources_page.dart';
 import 'pages/payment_obligations_page.dart';
 import 'pages/payment_records_page.dart';
@@ -58,6 +59,7 @@ class _HomePageState extends State<HomePage> {
       const DebtsPage(),
       const FixedExpensesPage(),
       const IncomeSourcesPage(),
+      IncomeEventsPage(year: year, month: month),
     ];
 
     final titles = [
@@ -67,6 +69,7 @@ class _HomePageState extends State<HomePage> {
       'Deudas',
       'Gastos fijos',
       'Ingresos',
+      'Eventos de ingreso',
     ];
 
     return Scaffold(
@@ -109,6 +112,10 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(
             icon: Icon(Icons.attach_money_outlined),
             label: 'Ingresos',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.event_note_outlined),
+            label: 'Eventos',
           ),
         ],
       ),
