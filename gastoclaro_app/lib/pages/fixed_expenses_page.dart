@@ -8,6 +8,7 @@ import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/app_entity_card.dart';
+import '../widgets/fixed_expense_form_sheet.dart';
 
 class FixedExpensesPage extends StatefulWidget {
   const FixedExpensesPage({super.key});
@@ -58,215 +59,40 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
   }
 
   Future<void> openFixedExpenseDialog({FixedExpense? existingExpense}) async {
-    final nameController = TextEditingController(
-      text: existingExpense?.name ?? '',
-    );
-    final categoryController = TextEditingController(
-      text: existingExpense?.category ?? '',
-    );
-    final amountController = TextEditingController(
-      text: existingExpense?.amount.toStringAsFixed(2) ?? '',
-    );
-    final dueDayController = TextEditingController(
-      text: existingExpense?.dueDay?.toString() ?? '',
-    );
-    final notesController = TextEditingController(
-      text: existingExpense?.notes ?? '',
-    );
-
-    String currency = existingExpense?.currency ?? 'PEN';
-    String frequency = existingExpense?.frequency ?? 'monthly';
-    bool isMandatory = existingExpense?.isMandatory ?? true;
-    bool isActive = existingExpense?.isActive ?? true;
-
-    final confirmed = await showDialog<bool>(
+    final draft = await showFixedExpenseFormSheet(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text(
-                existingExpense == null
-                    ? 'Nuevo gasto fijo'
-                    : 'Editar gasto fijo',
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Nombre',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: categoryController,
-                      decoration: const InputDecoration(
-                        labelText: 'Categoría',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: amountController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Monto',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: currency,
-                      decoration: const InputDecoration(
-                        labelText: 'Moneda',
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'PEN', child: Text('PEN')),
-                        DropdownMenuItem(value: 'USD', child: Text('USD')),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          currency = value ?? 'PEN';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: dueDayController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Día de vencimiento',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: frequency,
-                      decoration: const InputDecoration(
-                        labelText: 'Frecuencia',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'monthly',
-                          child: Text('Mensual'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'weekly',
-                          child: Text('Semanal'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'yearly',
-                          child: Text('Anual'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        setDialogState(() {
-                          frequency = value ?? 'monthly';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Es obligatorio'),
-                      value: isMandatory,
-                      onChanged: (value) {
-                        setDialogState(() {
-                          isMandatory = value;
-                        });
-                      },
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Está activo'),
-                      value: isActive,
-                      onChanged: (value) {
-                        setDialogState(() {
-                          isActive = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: notesController,
-                      decoration: const InputDecoration(
-                        labelText: 'Notas',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Guardar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      existingExpense: existingExpense,
     );
 
-    if (confirmed != true) {
-      return;
-    }
-
-    final amount = double.tryParse(amountController.text.trim());
-
-    if (nameController.text.trim().isEmpty || amount == null || amount < 0) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Completa al menos nombre y monto válido'),
-        ),
-      );
-
+    if (draft == null) {
       return;
     }
 
     try {
       if (existingExpense == null) {
         await fixedExpenseService.createFixedExpense(
-          name: nameController.text.trim(),
-          category: categoryController.text.trim().isEmpty
-              ? null
-              : categoryController.text.trim(),
-          amount: amount,
-          currency: currency,
-          dueDay: int.tryParse(dueDayController.text.trim()),
-          frequency: frequency,
-          isMandatory: isMandatory,
-          isActive: isActive,
-          notes: notesController.text.trim().isEmpty
-              ? null
-              : notesController.text.trim(),
+          name: draft.name,
+          category: draft.category,
+          amount: draft.amount,
+          currency: draft.currency,
+          dueDay: draft.dueDay,
+          frequency: draft.frequency,
+          isMandatory: draft.isMandatory,
+          isActive: draft.isActive,
+          notes: draft.notes,
         );
       } else {
         await fixedExpenseService.updateFixedExpense(
           id: existingExpense.id,
-          name: nameController.text.trim(),
-          category: categoryController.text.trim().isEmpty
-              ? null
-              : categoryController.text.trim(),
-          amount: amount,
-          currency: currency,
-          dueDay: int.tryParse(dueDayController.text.trim()),
-          frequency: frequency,
-          isMandatory: isMandatory,
-          isActive: isActive,
-          notes: notesController.text.trim().isEmpty
-              ? null
-              : notesController.text.trim(),
+          name: draft.name,
+          category: draft.category,
+          amount: draft.amount,
+          currency: draft.currency,
+          dueDay: draft.dueDay,
+          frequency: draft.frequency,
+          isMandatory: draft.isMandatory,
+          isActive: draft.isActive,
+          notes: draft.notes,
         );
       }
 

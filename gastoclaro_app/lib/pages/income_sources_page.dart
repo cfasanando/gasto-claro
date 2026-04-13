@@ -9,6 +9,7 @@ import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/app_entity_card.dart';
+import '../widgets/income_source_form_sheet.dart';
 
 class IncomeSourcesPage extends StatefulWidget {
   const IncomeSourcesPage({super.key});
@@ -93,188 +94,34 @@ class _IncomeSourcesPageState extends State<IncomeSourcesPage> {
   }
 
   Future<void> openIncomeSourceDialog({IncomeSource? existingSource}) async {
-    final formKey = GlobalKey<FormState>();
-
-    final nameController = TextEditingController(
-      text: existingSource?.name ?? '',
-    );
-    final defaultAmountController = TextEditingController(
-      text: existingSource?.defaultAmount?.toStringAsFixed(2) ?? '',
-    );
-    final notesController = TextEditingController(
-      text: existingSource?.notes ?? '',
-    );
-
-    String type = existingSource?.type ?? 'salary';
-    String currency = existingSource?.currency ?? 'PEN';
-    bool isActive = existingSource?.isActive ?? true;
-
-    final confirmed = await showDialog<bool>(
+    final draft = await showIncomeSourceFormSheet(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text(
-                existingSource == null
-                    ? 'Nueva fuente de ingreso'
-                    : 'Editar fuente de ingreso',
-              ),
-              content: SingleChildScrollView(
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextFormField(
-                        controller: nameController,
-                        decoration: dialogInputDecoration('Nombre'),
-                        validator: (value) => AppValidators.requiredText(
-                          value,
-                          label: 'El nombre',
-                        ),
-                        autovalidateMode: AutovalidateMode.onUserInteraction,
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        value: type,
-                        decoration: dialogInputDecoration('Tipo'),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'salary',
-                            child: Text('Sueldo'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'bonus',
-                            child: Text('Bono / gratificación'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'cts',
-                            child: Text('CTS'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'vacation',
-                            child: Text('Vacaciones'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'freelance',
-                            child: Text('Freelance'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'business',
-                            child: Text('Negocio'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'other',
-                            child: Text('Otro'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setDialogState(() {
-                            type = value ?? 'salary';
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: defaultAmountController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: dialogInputDecoration('Monto por defecto'),
-                        validator: (value) => AppValidators.optionalNumber(
-                          value,
-                          label: 'El monto por defecto',
-                          allowZero: true,
-                        ),
-                        autovalidateMode: AutovalidateMode.onUserInteraction,
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        value: currency,
-                        decoration: dialogInputDecoration('Moneda'),
-                        items: const [
-                          DropdownMenuItem(value: 'PEN', child: Text('PEN')),
-                          DropdownMenuItem(value: 'USD', child: Text('USD')),
-                        ],
-                        onChanged: (value) {
-                          setDialogState(() {
-                            currency = value ?? 'PEN';
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Está activa'),
-                        value: isActive,
-                        onChanged: (value) {
-                          setDialogState(() {
-                            isActive = value;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: notesController,
-                        decoration: dialogInputDecoration('Notas'),
-                        maxLines: 2,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final isValid = formKey.currentState?.validate() ?? false;
-
-                    if (!isValid) {
-                      return;
-                    }
-
-                    Navigator.of(context).pop(true);
-                  },
-                  child: const Text('Guardar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      existingSource: existingSource,
     );
 
-    if (confirmed != true) {
+    if (draft == null) {
       return;
     }
 
     try {
       if (existingSource == null) {
         await incomeSourceService.createIncomeSource(
-          name: nameController.text.trim(),
-          type: type,
-          defaultAmount: double.tryParse(defaultAmountController.text.trim()),
-          currency: currency,
-          isActive: isActive,
-          notes: notesController.text.trim().isEmpty
-              ? null
-              : notesController.text.trim(),
+          name: draft.name,
+          type: draft.type,
+          defaultAmount: draft.defaultAmount,
+          currency: draft.currency,
+          isActive: draft.isActive,
+          notes: draft.notes,
         );
       } else {
         await incomeSourceService.updateIncomeSource(
           id: existingSource.id,
-          name: nameController.text.trim(),
-          type: type,
-          defaultAmount: double.tryParse(defaultAmountController.text.trim()),
-          currency: currency,
-          isActive: isActive,
-          notes: notesController.text.trim().isEmpty
-              ? null
-              : notesController.text.trim(),
+          name: draft.name,
+          type: draft.type,
+          defaultAmount: draft.defaultAmount,
+          currency: draft.currency,
+          isActive: draft.isActive,
+          notes: draft.notes,
         );
       }
 
