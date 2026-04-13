@@ -10,6 +10,7 @@ import '../widgets/app_status_chip.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/app_entity_card.dart';
 import '../widgets/debt_form_sheet.dart';
+import '../widgets/app_destructive_action_sheet.dart';
 
 class DebtsPage extends StatefulWidget {
   const DebtsPage({super.key});
@@ -194,24 +195,12 @@ class _DebtsPageState extends State<DebtsPage> {
   }
 
   Future<void> confirmDeleteDebt(Debt debt) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showDestructiveActionSheet(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Eliminar deuda'),
-          content: Text('¿Deseas eliminar "${debt.name}"?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Eliminar'),
-            ),
-          ],
-        );
-      },
+      title: 'Eliminar deuda',
+      message: '¿Deseas eliminar "${debt.name}"?',
+      confirmLabel: 'Eliminar',
+      icon: Icons.account_balance_wallet_outlined,
     );
 
     if (confirmed != true) {

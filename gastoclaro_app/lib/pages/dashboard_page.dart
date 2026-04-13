@@ -200,10 +200,20 @@ class _DashboardPageState extends State<DashboardPage> {
         final dashboard = snapshot.data!;
         final width = MediaQuery.of(context).size.width;
         final summaryColumns = width >= 1100
-            ? 4
+            ? 3
             : width >= 720
             ? 2
+            : width >= 430
+            ? 2
             : 1;
+
+        final summaryCardHeight = width >= 1100
+            ? 158.0
+            : width >= 720
+            ? 148.0
+            : width >= 430
+            ? 136.0
+            : 122.0;
 
         return RefreshIndicator(
           onRefresh: reload,
@@ -262,13 +272,15 @@ class _DashboardPageState extends State<DashboardPage> {
                 subtitle: 'Vista rápida de lo más importante',
               ),
               const SizedBox(height: 12),
-              GridView.count(
-                crossAxisCount: summaryColumns,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
+              GridView(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: width >= 720 ? 1.6 : 1.9,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: summaryColumns,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  mainAxisExtent: summaryCardHeight,
+                ),
                 children: [
                   _MetricCard(
                     title: 'Ingreso esperado',
@@ -612,31 +624,43 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: accent),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: accent),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const Spacer(),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 6),
             Text(
               value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 20,
-                letterSpacing: -0.3,
+                fontSize: 24,
+                letterSpacing: -0.5,
+                height: 1.0,
               ),
             ),
           ],

@@ -10,6 +10,7 @@ import '../widgets/app_status_chip.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/app_entity_card.dart';
 import '../widgets/income_source_form_sheet.dart';
+import '../widgets/app_destructive_action_sheet.dart';
 
 class IncomeSourcesPage extends StatefulWidget {
   const IncomeSourcesPage({super.key});
@@ -158,24 +159,12 @@ class _IncomeSourcesPageState extends State<IncomeSourcesPage> {
   }
 
   Future<void> confirmDeleteIncomeSource(IncomeSource source) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showDestructiveActionSheet(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Eliminar fuente de ingreso'),
-          content: Text('¿Deseas eliminar "${source.name}"?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Eliminar'),
-            ),
-          ],
-        );
-      },
+      title: 'Eliminar fuente de ingreso',
+      message: '¿Deseas eliminar "${source.name}"?',
+      confirmLabel: 'Eliminar',
+      icon: Icons.attach_money_outlined,
     );
 
     if (confirmed != true) {

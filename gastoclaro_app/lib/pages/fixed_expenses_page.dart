@@ -9,6 +9,7 @@ import '../widgets/app_status_chip.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/app_entity_card.dart';
 import '../widgets/fixed_expense_form_sheet.dart';
+import '../widgets/app_destructive_action_sheet.dart';
 
 class FixedExpensesPage extends StatefulWidget {
   const FixedExpensesPage({super.key});
@@ -129,24 +130,12 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
   }
 
   Future<void> confirmDeleteFixedExpense(FixedExpense expense) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showDestructiveActionSheet(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Eliminar gasto fijo'),
-          content: Text('¿Deseas eliminar "${expense.name}"?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Eliminar'),
-            ),
-          ],
-        );
-      },
+      title: 'Eliminar gasto fijo',
+      message: '¿Deseas eliminar "${expense.name}"?',
+      confirmLabel: 'Eliminar',
+      icon: Icons.home_work_outlined,
     );
 
     if (confirmed != true) {

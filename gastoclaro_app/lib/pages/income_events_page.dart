@@ -13,6 +13,7 @@ import '../widgets/income_event_form_sheet.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/app_entity_card.dart';
 import '../widgets/app_page_state.dart';
+import '../widgets/app_destructive_action_sheet.dart';
 
 class IncomeEventsPage extends StatefulWidget {
   final int year;
@@ -202,24 +203,12 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
   }
 
   Future<void> confirmDeleteIncomeEvent(IncomeEvent event) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showDestructiveActionSheet(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Eliminar evento de ingreso'),
-          content: Text('¿Deseas eliminar "${event.title}"?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Eliminar'),
-            ),
-          ],
-        );
-      },
+      title: 'Eliminar evento de ingreso',
+      message: '¿Deseas eliminar "${event.title}"?',
+      confirmLabel: 'Eliminar',
+      icon: Icons.event_note_outlined,
     );
 
     if (confirmed != true) {
