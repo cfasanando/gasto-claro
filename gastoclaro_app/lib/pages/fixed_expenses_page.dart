@@ -6,6 +6,8 @@ import '../utils/app_formatters.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
+import '../theme/app_tokens.dart';
+import '../widgets/app_entity_card.dart';
 
 class FixedExpensesPage extends StatefulWidget {
   const FixedExpensesPage({super.key});
@@ -420,101 +422,51 @@ class _FixedExpensesPageState extends State<FixedExpensesPage> {
                 )
               else
                 ...items.map(
-                      (item) => Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(item.category ?? 'Sin categoría'),
-                                const SizedBox(height: 6),
-                                Text('Frecuencia: ${translateFrequency(item.frequency)}'),
-                                const SizedBox(height: 6),
-                                Text('Vence día: ${item.dueDay ?? '-'}'),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    AppStatusChip(
-                                      label: item.isActive ? 'Activo' : 'Inactivo',
-                                      color: item.isActive ? Colors.green : Colors.grey,
-                                      icon: item.isActive
-                                          ? Icons.check_circle_outline
-                                          : Icons.pause_circle_outline,
-                                    ),
-                                    AppStatusChip(
-                                      label: item.isMandatory ? 'Obligatorio' : 'Opcional',
-                                      color: item.isMandatory ? Colors.indigo : Colors.orange,
-                                      icon: item.isMandatory
-                                          ? Icons.priority_high_outlined
-                                          : Icons.low_priority_outlined,
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                AppFormatters.money(item.amount, item.currency),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              PopupMenuButton<String>(
-                                tooltip: 'Acciones',
-                                onSelected: (value) {
-                                  if (value == 'edit') {
-                                    openEditFixedExpenseDialog(item);
-                                  } else if (value == 'delete') {
-                                    confirmDeleteFixedExpense(item);
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit_outlined, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Editar'),
-                                      ],
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.delete_outline, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Eliminar'),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                icon: const Icon(Icons.more_vert),
-                              ),
-                            ],
-                          ),
-                        ],
+                      (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: AppEntityCard(
+                      icon: Icons.home_work_outlined,
+                      accentColor: item.isActive ? AppTokens.info : AppTokens.ink500,
+                      eyebrow: 'Gasto fijo',
+                      title: item.name,
+                      subtitle: item.category ?? 'Sin categoría',
+                      trailing: AppFormatters.money(item.amount, item.currency),
+                      statusChip: AppStatusChip(
+                        label: item.isActive ? 'Activo' : 'Inactivo',
+                        color: item.isActive ? AppTokens.success : Colors.grey,
+                        icon: item.isActive
+                            ? Icons.check_circle_outline
+                            : Icons.pause_circle_outline,
                       ),
+                      metadata: [
+                        AppEntityMeta(
+                          icon: Icons.repeat_outlined,
+                          label: translateFrequency(item.frequency),
+                        ),
+                        if ((item.dueDay ?? 0) > 0)
+                          AppEntityMeta(
+                            icon: Icons.calendar_today_outlined,
+                            label: 'Día ${item.dueDay}',
+                          ),
+                        AppEntityMeta(
+                          icon: item.isMandatory
+                              ? Icons.priority_high_outlined
+                              : Icons.low_priority_outlined,
+                          label: item.isMandatory ? 'Obligatorio' : 'Opcional',
+                        ),
+                      ],
+                      actions: [
+                        OutlinedButton.icon(
+                          onPressed: () => openEditFixedExpenseDialog(item),
+                          icon: const Icon(Icons.edit_outlined),
+                          label: const Text('Editar'),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => confirmDeleteFixedExpense(item),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Eliminar'),
+                        ),
+                      ],
                     ),
                   ),
                 ),

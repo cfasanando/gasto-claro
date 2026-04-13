@@ -8,6 +8,8 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
 import '../widgets/payment_record_sheet.dart';
+import '../theme/app_tokens.dart';
+import '../widgets/app_entity_card.dart';
 
 class PaymentObligationsPage extends StatefulWidget {
   final int year;
@@ -258,61 +260,46 @@ class _PaymentObligationsPageState extends State<PaymentObligationsPage> {
                 )
               else
                 ...items.map(
-                      (item) => Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.title,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Vence: ${AppFormatters.date(item.dueDate)}',
-                                    ),
-                                    const SizedBox(height: 8),
-                                    AppStatusChip(
-                                      label: AppFormatters.obligationStatus(item.status),
-                                      color: statusColor(item.status),
-                                      icon: statusIcon(item.status),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                AppFormatters.money(item.amountDue, item.currency),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (item.status != 'paid' && item.status != 'cancelled') ...[
-                            const SizedBox(height: 14),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: FilledButton.icon(
-                                onPressed: () => registerPayment(item),
-                                icon: const Icon(Icons.payments_outlined),
-                                label: const Text('Pagar'),
-                              ),
-                            ),
-                          ],
-                        ],
+                      (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: AppEntityCard(
+                      icon: Icons.receipt_long_outlined,
+                      accentColor: item.status == 'overdue'
+                          ? AppTokens.danger
+                          : item.status == 'paid'
+                          ? AppTokens.success
+                          : Theme.of(context).colorScheme.primary,
+                      eyebrow: 'Obligación mensual',
+                      title: item.title,
+                      subtitle: 'Vence: ${AppFormatters.date(item.dueDate)}',
+                      trailing: AppFormatters.money(item.amountDue, item.currency),
+                      statusChip: AppStatusChip(
+                        label: AppFormatters.obligationStatus(item.status),
+                        color: statusColor(item.status),
+                        icon: statusIcon(item.status),
                       ),
+                      metadata: [
+                        AppEntityMeta(
+                          icon: Icons.event_outlined,
+                          label: 'Periodo ${widget.month.toString().padLeft(2, '0')}/${widget.year}',
+                        ),
+                        AppEntityMeta(
+                          icon: Icons.payments_outlined,
+                          label: item.status == 'paid'
+                              ? 'Pago completo'
+                              : item.status == 'partial'
+                              ? 'Pago parcial'
+                              : 'Pendiente',
+                        ),
+                      ],
+                      actions: [
+                        if (item.status != 'paid' && item.status != 'cancelled')
+                          FilledButton.icon(
+                            onPressed: () => registerPayment(item),
+                            icon: const Icon(Icons.payments_outlined),
+                            label: const Text('Registrar pago'),
+                          ),
+                      ],
                     ),
                   ),
                 ),

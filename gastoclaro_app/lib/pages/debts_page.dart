@@ -7,6 +7,8 @@ import '../utils/app_validators.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
+import '../theme/app_tokens.dart';
+import '../widgets/app_entity_card.dart';
 
 class DebtsPage extends StatefulWidget {
   const DebtsPage({super.key});
@@ -567,106 +569,68 @@ class _DebtsPageState extends State<DebtsPage> {
                 )
               else
                 ...items.map(
-                      (item) => Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(translateDebtType(item.debtType)),
-                                const SizedBox(height: 6),
-                                Text('Vence día: ${item.dueDay ?? '-'}'),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    AppStatusChip(
-                                      label: translateStatus(item.status),
-                                      color: statusColor(item.status),
-                                      icon: statusIcon(item.status),
-                                    ),
-                                    if (item.hasFixedPayment)
-                                      const AppStatusChip(
-                                        label: 'Pago fijo',
-                                        color: Colors.indigo,
-                                        icon: Icons.repeat_outlined,
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                AppFormatters.money(
-                                  item.currentBalance,
-                                  item.currency,
-                                ),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              if (item.monthlyDueAmount != null) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Cuota: ${AppFormatters.money(item.monthlyDueAmount!, item.currency)}',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ],
-                              PopupMenuButton<String>(
-                                tooltip: 'Acciones',
-                                onSelected: (value) {
-                                  if (value == 'edit') {
-                                    openEditDebtDialog(item);
-                                  } else if (value == 'delete') {
-                                    confirmDeleteDebt(item);
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit_outlined, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Editar'),
-                                      ],
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.delete_outline, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Eliminar'),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                icon: const Icon(Icons.more_vert),
-                              ),
-                            ],
-                          ),
-                        ],
+                      (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: AppEntityCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      accentColor: item.status == 'paid'
+                          ? AppTokens.success
+                          : item.status == 'suspended'
+                          ? AppTokens.warning
+                          : item.status == 'cancelled'
+                          ? AppTokens.danger
+                          : AppTokens.info,
+                      eyebrow: 'Deuda',
+                      title: item.name,
+                      subtitle: item.creditorName?.trim().isNotEmpty == true
+                          ? item.creditorName!
+                          : translateDebtType(item.debtType),
+                      trailing: AppFormatters.money(item.currentBalance, item.currency),
+                      statusChip: AppStatusChip(
+                        label: translateStatus(item.status),
+                        color: statusColor(item.status),
+                        icon: statusIcon(item.status),
                       ),
+                      metadata: [
+                        AppEntityMeta(
+                          icon: Icons.label_outline,
+                          label: translateDebtType(item.debtType),
+                        ),
+                        if (item.dueDay != null)
+                          AppEntityMeta(
+                            icon: Icons.calendar_today_outlined,
+                            label: 'Vence día ${item.dueDay}',
+                          ),
+                        if (item.monthlyDueAmount != null)
+                          AppEntityMeta(
+                            icon: Icons.payments_outlined,
+                            label:
+                            'Cuota ${AppFormatters.money(item.monthlyDueAmount!, item.currency)}',
+                          ),
+                        if (item.minimumPayment != null)
+                          AppEntityMeta(
+                            icon: Icons.savings_outlined,
+                            label:
+                            'Mínimo ${AppFormatters.money(item.minimumPayment!, item.currency)}',
+                          ),
+                        if (item.hasFixedPayment)
+                          const AppEntityMeta(
+                            icon: Icons.repeat_outlined,
+                            label: 'Pago fijo',
+                          ),
+                      ],
+                      actions: [
+                        OutlinedButton.icon(
+                          onPressed: () => openEditDebtDialog(item),
+                          icon: const Icon(Icons.edit_outlined),
+                          label: const Text('Editar'),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => confirmDeleteDebt(item),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Eliminar'),
+                        ),
+                      ],
                     ),
                   ),
                 ),

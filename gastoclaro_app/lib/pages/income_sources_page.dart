@@ -7,6 +7,8 @@ import '../utils/app_validators.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
+import '../theme/app_tokens.dart';
+import '../widgets/app_entity_card.dart';
 
 class IncomeSourcesPage extends StatefulWidget {
   const IncomeSourcesPage({super.key});
@@ -428,99 +430,56 @@ class _IncomeSourcesPageState extends State<IncomeSourcesPage> {
                 )
               else
                 ...items.map(
-                      (item) => Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    AppStatusChip(
-                                      label: translateType(item.type),
-                                      color: typeColor(item.type),
-                                      icon: Icons.label_outline,
-                                    ),
-                                    AppStatusChip(
-                                      label: item.isActive ? 'Activa' : 'Inactiva',
-                                      color: item.isActive ? Colors.green : Colors.grey,
-                                      icon: item.isActive
-                                          ? Icons.check_circle_outline
-                                          : Icons.pause_circle_outline,
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              if (item.defaultAmount != null)
-                                Text(
-                                  AppFormatters.money(item.defaultAmount!, item.currency),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              const SizedBox(height: 4),
-                              Text(
-                                item.currency,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              PopupMenuButton<String>(
-                                tooltip: 'Acciones',
-                                onSelected: (value) {
-                                  if (value == 'edit') {
-                                    openEditIncomeSourceDialog(item);
-                                  } else if (value == 'delete') {
-                                    confirmDeleteIncomeSource(item);
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit_outlined, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Editar'),
-                                      ],
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.delete_outline, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Eliminar'),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                icon: const Icon(Icons.more_vert),
-                              ),
-                            ],
-                          ),
-                        ],
+                      (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: AppEntityCard(
+                      icon: Icons.attach_money_outlined,
+                      accentColor: item.isActive ? typeColor(item.type) : AppTokens.ink500,
+                      eyebrow: 'Fuente de ingreso',
+                      title: item.name,
+                      subtitle: item.notes?.trim().isNotEmpty == true
+                          ? item.notes!
+                          : translateType(item.type),
+                      trailing: item.defaultAmount != null
+                          ? AppFormatters.money(item.defaultAmount!, item.currency)
+                          : 'Variable',
+                      statusChip: AppStatusChip(
+                        label: item.isActive ? 'Activa' : 'Inactiva',
+                        color: item.isActive ? AppTokens.success : Colors.grey,
+                        icon: item.isActive
+                            ? Icons.check_circle_outline
+                            : Icons.pause_circle_outline,
                       ),
+                      metadata: [
+                        AppEntityMeta(
+                          icon: Icons.label_outline,
+                          label: translateType(item.type),
+                        ),
+                        AppEntityMeta(
+                          icon: Icons.currency_exchange_outlined,
+                          label: item.currency,
+                        ),
+                        AppEntityMeta(
+                          icon: item.defaultAmount != null
+                              ? Icons.tune_outlined
+                              : Icons.auto_awesome_motion_outlined,
+                          label: item.defaultAmount != null
+                              ? 'Monto base definido'
+                              : 'Monto variable',
+                        ),
+                      ],
+                      actions: [
+                        OutlinedButton.icon(
+                          onPressed: () => openEditIncomeSourceDialog(item),
+                          icon: const Icon(Icons.edit_outlined),
+                          label: const Text('Editar'),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => confirmDeleteIncomeSource(item),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Eliminar'),
+                        ),
+                      ],
                     ),
                   ),
                 ),
