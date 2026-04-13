@@ -10,6 +10,9 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
 import '../widgets/income_event_form_sheet.dart';
+import '../theme/app_tokens.dart';
+import '../widgets/app_entity_card.dart';
+import '../widgets/app_page_state.dart';
 
 class IncomeEventsPage extends StatefulWidget {
   final int year;
@@ -255,41 +258,17 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
       future: futureItems,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
+          return const AppPageLoadingState(
+            title: 'Cargando eventos de ingreso',
+            subtitle: 'Estamos reuniendo lo esperado y lo recibido del mes.',
           );
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, size: 48),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No se pudieron cargar los eventos de ingreso',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    snapshot.error.toString(),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: reload,
-                    child: const Text('Reintentar'),
-                  ),
-                ],
-              ),
-            ),
+          return AppPageErrorState(
+            title: 'No se pudieron cargar los eventos de ingreso',
+            subtitle: snapshot.error.toString(),
+            onRetry: reload,
           );
         }
 
@@ -318,88 +297,53 @@ class _IncomeEventsPageState extends State<IncomeEventsPage> {
                 )
               else
                 ...items.map(
-                      (item) => Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.title,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text('Fuente: ${item.incomeSourceName ?? 'Sin fuente'}'),
-                                const SizedBox(height: 6),
-                                Text('Esperado: ${AppFormatters.date(item.expectedDate)}'),
-                                if (item.receivedDate != null) ...[
-                                  const SizedBox(height: 6),
-                                  Text('Recibido: ${AppFormatters.date(item.receivedDate)}'),
-                                ],
-                                const SizedBox(height: 10),
-                                AppStatusChip(
-                                  label: translateStatus(item.status),
-                                  color: statusColor(item.status),
-                                  icon: statusIcon(item.status),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                AppFormatters.money(item.amount, item.currency),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              PopupMenuButton<String>(
-                                tooltip: 'Acciones',
-                                onSelected: (value) {
-                                  if (value == 'edit') {
-                                    openEditIncomeEventDialog(item);
-                                  } else if (value == 'delete') {
-                                    confirmDeleteIncomeEvent(item);
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit_outlined, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Editar'),
-                                      ],
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.delete_outline, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Eliminar'),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                icon: const Icon(Icons.more_vert),
-                              ),
-                            ],
-                          ),
-                        ],
+                      (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: AppEntityCard(
+                      icon: item.status == 'received'
+                          ? Icons.trending_up_outlined
+                          : item.status == 'missed'
+                          ? Icons.event_busy_outlined
+                          : Icons.event_note_outlined,
+                      accentColor: statusColor(item.status),
+                      eyebrow: 'Evento de ingreso',
+                      title: item.title,
+                      subtitle: item.incomeSourceName?.trim().isNotEmpty == true
+                          ? item.incomeSourceName!
+                          : 'Sin fuente asignada',
+                      trailing: AppFormatters.money(item.amount, item.currency),
+                      statusChip: AppStatusChip(
+                        label: translateStatus(item.status),
+                        color: statusColor(item.status),
+                        icon: statusIcon(item.status),
                       ),
+                      metadata: [
+                        AppEntityMeta(
+                          icon: Icons.schedule_outlined,
+                          label: 'Esperado ${AppFormatters.date(item.expectedDate)}',
+                        ),
+                        if (item.receivedDate != null)
+                          AppEntityMeta(
+                            icon: Icons.check_circle_outline,
+                            label: 'Recibido ${AppFormatters.date(item.receivedDate)}',
+                          ),
+                        AppEntityMeta(
+                          icon: Icons.currency_exchange_outlined,
+                          label: item.currency,
+                        ),
+                      ],
+                      actions: [
+                        OutlinedButton.icon(
+                          onPressed: () => openEditIncomeEventDialog(item),
+                          icon: const Icon(Icons.edit_outlined),
+                          label: const Text('Editar'),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => confirmDeleteIncomeEvent(item),
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Eliminar'),
+                        ),
+                      ],
                     ),
                   ),
                 ),

@@ -6,6 +6,9 @@ import '../utils/app_formatters.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
+import '../theme/app_tokens.dart';
+import '../widgets/app_entity_card.dart';
+import '../widgets/app_page_state.dart';
 
 class PaymentRecordsPage extends StatefulWidget {
   final int year;
@@ -117,41 +120,17 @@ class _PaymentRecordsPageState extends State<PaymentRecordsPage> {
       future: futureItems,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
+          return const AppPageLoadingState(
+            title: 'Cargando pagos',
+            subtitle: 'Estamos trayendo los movimientos registrados del mes.',
           );
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, size: 48),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No se pudieron cargar los pagos',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    snapshot.error.toString(),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: reload,
-                    child: const Text('Reintentar'),
-                  ),
-                ],
-              ),
-            ),
+          return AppPageErrorState(
+            title: 'No se pudieron cargar los pagos',
+            subtitle: snapshot.error.toString(),
+            onRetry: reload,
           );
         }
 
@@ -175,60 +154,32 @@ class _PaymentRecordsPageState extends State<PaymentRecordsPage> {
                 )
               else
                 ...items.map(
-                      (item) => Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.obligationTitle ?? 'Pago',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Fecha: ${AppFormatters.date(item.paidAt)}',
-                                    ),
-                                    const SizedBox(height: 8),
-                                    AppStatusChip(
-                                      label: translatePaymentMethod(item.paymentMethod),
-                                      color: methodColor(item.paymentMethod),
-                                      icon: methodIcon(item.paymentMethod),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                AppFormatters.money(item.paidAmount, item.currency),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (item.note != null && item.note!.trim().isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                item.note!,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                          ],
-                        ],
+                      (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: AppEntityCard(
+                      icon: methodIcon(item.paymentMethod),
+                      accentColor: methodColor(item.paymentMethod),
+                      eyebrow: 'Pago registrado',
+                      title: item.obligationTitle ?? 'Pago',
+                      subtitle: item.note != null && item.note!.trim().isNotEmpty
+                          ? item.note!
+                          : 'Movimiento registrado correctamente.',
+                      trailing: AppFormatters.money(item.paidAmount, item.currency),
+                      statusChip: AppStatusChip(
+                        label: translatePaymentMethod(item.paymentMethod),
+                        color: methodColor(item.paymentMethod),
+                        icon: methodIcon(item.paymentMethod),
                       ),
+                      metadata: [
+                        AppEntityMeta(
+                          icon: Icons.event_outlined,
+                          label: AppFormatters.date(item.paidAt),
+                        ),
+                        AppEntityMeta(
+                          icon: Icons.currency_exchange_outlined,
+                          label: item.currency,
+                        ),
+                      ],
                     ),
                   ),
                 ),
