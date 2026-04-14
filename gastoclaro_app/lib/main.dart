@@ -116,7 +116,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int currentIndex = 0;
-
   late int year;
   late int month;
 
@@ -138,6 +137,64 @@ class _HomePageState extends State<HomePage> {
     'Octubre',
     'Noviembre',
     'Diciembre',
+  ];
+
+  static const List<String> pageTitles = [
+    'Resumen',
+    'Obligaciones',
+    'Pagos',
+    'Deudas',
+    'Gastos',
+    'Ingresos',
+    'Eventos',
+  ];
+
+  static const List<String> pageSubtitles = [
+    'Tu balance mensual y la lectura rápida del periodo.',
+    'Lo que vence y necesita atención este mes.',
+    'Tus pagos registrados durante el periodo.',
+    'Tus compromisos y saldos pendientes.',
+    'Tus gastos fijos y recurrentes.',
+    'Tus fuentes base de ingreso.',
+    'Tus ingresos planificados o recibidos.',
+  ];
+
+  static const List<_AppDestination> appDestinations = [
+    _AppDestination(
+      label: 'Panel',
+      icon: Icons.dashboard_outlined,
+      selectedIcon: Icons.dashboard_rounded,
+    ),
+    _AppDestination(
+      label: 'Obligaciones',
+      icon: Icons.receipt_long_outlined,
+      selectedIcon: Icons.receipt_long,
+    ),
+    _AppDestination(
+      label: 'Pagos',
+      icon: Icons.payments_outlined,
+      selectedIcon: Icons.payments,
+    ),
+    _AppDestination(
+      label: 'Deudas',
+      icon: Icons.account_balance_wallet_outlined,
+      selectedIcon: Icons.account_balance_wallet,
+    ),
+    _AppDestination(
+      label: 'Gastos',
+      icon: Icons.home_work_outlined,
+      selectedIcon: Icons.home_work,
+    ),
+    _AppDestination(
+      label: 'Ingresos',
+      icon: Icons.attach_money_outlined,
+      selectedIcon: Icons.attach_money,
+    ),
+    _AppDestination(
+      label: 'Eventos',
+      icon: Icons.event_note_outlined,
+      selectedIcon: Icons.event_note,
+    ),
   ];
 
   @override
@@ -243,6 +300,52 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  int get mobileSelectedIndex {
+    if (currentIndex >= 0 && currentIndex <= 2) {
+      return currentIndex;
+    }
+
+    return 3;
+  }
+
+  void handleMobileDestinationSelected(int index) {
+    if (index == 3) {
+      openMobileSectionsSheet();
+      return;
+    }
+
+    openTab(index);
+  }
+
+  Future<void> openMobileSectionsSheet() async {
+    final selected = await showModalBottomSheet<int>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return _MobileSectionsSheet(
+          currentIndex: currentIndex,
+          items: [
+            for (int index = 3; index < appDestinations.length; index++)
+              _MobileSectionItem(
+                index: index,
+                title: appDestinations[index].label,
+                subtitle: pageSubtitles[index],
+                icon: appDestinations[index].selectedIcon,
+              ),
+          ],
+        );
+      },
+    );
+
+    if (selected == null || !mounted) {
+      return;
+    }
+
+    openTab(selected);
+  }
+
   String get userInitial {
     final name = currentUser?.name.trim() ?? '';
 
@@ -271,61 +374,13 @@ class _HomePageState extends State<HomePage> {
       IncomeEventsPage(year: year, month: month),
     ];
 
-    final titles = [
-      'Resumen',
-      'Obligaciones',
-      'Pagos',
-      'Deudas',
-      'Gastos',
-      'Ingresos',
-      'Eventos',
-    ];
-
     final width = MediaQuery.of(context).size.width;
     final useRail = width >= 1080;
-
-    final destinations = const [
-      _AppDestination(
-        label: 'Panel',
-        icon: Icons.dashboard_outlined,
-        selectedIcon: Icons.dashboard_rounded,
-      ),
-      _AppDestination(
-        label: 'Obligaciones',
-        icon: Icons.receipt_long_outlined,
-        selectedIcon: Icons.receipt_long,
-      ),
-      _AppDestination(
-        label: 'Pagos',
-        icon: Icons.payments_outlined,
-        selectedIcon: Icons.payments,
-      ),
-      _AppDestination(
-        label: 'Deudas',
-        icon: Icons.account_balance_wallet_outlined,
-        selectedIcon: Icons.account_balance_wallet,
-      ),
-      _AppDestination(
-        label: 'Gastos',
-        icon: Icons.home_work_outlined,
-        selectedIcon: Icons.home_work,
-      ),
-      _AppDestination(
-        label: 'Ingresos',
-        icon: Icons.attach_money_outlined,
-        selectedIcon: Icons.attach_money,
-      ),
-      _AppDestination(
-        label: 'Eventos',
-        icon: Icons.event_note_outlined,
-        selectedIcon: Icons.event_note,
-      ),
-    ];
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          titles[currentIndex],
+          pageTitles[currentIndex],
           style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w800,
@@ -349,9 +404,7 @@ class _HomePageState extends State<HomePage> {
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest,
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
@@ -382,7 +435,7 @@ class _HomePageState extends State<HomePage> {
               }
             },
             itemBuilder: (context) => [
-              PopupMenuItem<String>(
+              PopupMenuItem(
                 enabled: false,
                 child: SizedBox(
                   width: 240,
@@ -444,10 +497,10 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   CircleAvatar(
                     radius: 18,
-                    backgroundColor: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(alpha: 0.12),
+                    backgroundColor:
+                    Theme.of(context).colorScheme.primary.withValues(
+                      alpha: 0.12,
+                    ),
                     child: Text(
                       userInitial,
                       style: TextStyle(
@@ -515,7 +568,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ),
-                destinations: destinations
+                destinations: appDestinations
                     .map(
                       (item) => NavigationRailDestination(
                     icon: Icon(item.icon),
@@ -555,17 +608,30 @@ class _HomePageState extends State<HomePage> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(26),
           child: NavigationBar(
-            selectedIndex: currentIndex,
-            onDestinationSelected: openTab,
-            destinations: destinations
-                .map(
-                  (item) => NavigationDestination(
-                icon: Icon(item.icon),
-                selectedIcon: Icon(item.selectedIcon),
-                label: item.label,
+            selectedIndex: mobileSelectedIndex,
+            onDestinationSelected: handleMobileDestinationSelected,
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.dashboard_outlined),
+                selectedIcon: Icon(Icons.dashboard_rounded),
+                label: 'Panel',
               ),
-            )
-                .toList(),
+              NavigationDestination(
+                icon: Icon(Icons.receipt_long_outlined),
+                selectedIcon: Icon(Icons.receipt_long),
+                label: 'Obligaciones',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.payments_outlined),
+                selectedIcon: Icon(Icons.payments),
+                label: 'Pagos',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.grid_view_outlined),
+                selectedIcon: Icon(Icons.grid_view_rounded),
+                label: 'Más',
+              ),
+            ],
           ),
         ),
       ),
@@ -583,4 +649,174 @@ class _AppDestination {
     required this.icon,
     required this.selectedIcon,
   });
+}
+
+class _MobileSectionItem {
+  final int index;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  const _MobileSectionItem({
+    required this.index,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+}
+
+class _MobileSectionsSheet extends StatelessWidget {
+  final int currentIndex;
+  final List<_MobileSectionItem> items;
+
+  const _MobileSectionsSheet({
+    required this.currentIndex,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final surfaceColor = Theme.of(context).colorScheme.surface;
+    final outlineColor = Theme.of(context).dividerColor;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(32),
+        ),
+        border: Border.all(
+          color: outlineColor,
+          width: 0.9,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 28,
+            offset: const Offset(0, -8),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 46,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: outlineColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Más secciones',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Accede rápido a los módulos secundarios sin saturar la barra inferior.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
+              const SizedBox(height: 18),
+              ...items.map(
+                    (item) {
+                  final isSelected = item.index == currentIndex;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(22),
+                        onTap: () => Navigator.of(context).pop(item.index),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? primaryColor.withValues(alpha: 0.08)
+                                : surfaceColor,
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(
+                              color: isSelected
+                                  ? primaryColor.withValues(alpha: 0.18)
+                                  : outlineColor,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 46,
+                                height: 46,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? primaryColor.withValues(alpha: 0.14)
+                                      : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Icon(
+                                  item.icon,
+                                  color: isSelected
+                                      ? primaryColor
+                                      : Theme.of(context).iconTheme.color,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.title,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      item.subtitle,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.chevron_right,
+                                color: isSelected
+                                    ? primaryColor
+                                    : Theme.of(context).iconTheme.color,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
