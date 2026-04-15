@@ -15,6 +15,8 @@ import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
 import '../widgets/app_surface_card.dart';
 import '../widgets/payment_record_sheet.dart';
+import '../models/monthly_plan.dart';
+import '../services/monthly_plan_service.dart';
 
 class DashboardPage extends StatefulWidget {
   final int year;
@@ -40,6 +42,7 @@ class _DashboardPageState extends State<DashboardPage> {
   late Future<_DashboardBundle> futureDashboard;
   final DashboardService dashboardService = DashboardService();
   final DebtService debtService = DebtService();
+  final MonthlyPlanService monthlyPlanService = MonthlyPlanService();
   final PaymentObligationService paymentObligationService =
   PaymentObligationService();
   final PaymentRecordService paymentRecordService = PaymentRecordService();
@@ -363,12 +366,15 @@ class _DashboardPageState extends State<DashboardPage> {
         final bundle = snapshot.data!;
         final dashboard = bundle.dashboard;
         final debts = bundle.debts;
+        final monthlyPlan = monthlyPlanService.buildPlan(
+          dashboard: dashboard,
+          debts: debts,
+        );
         final urgentItems = buildUrgentItems(dashboard);
         final recentPaidItems = buildRecentPaidItems(dashboard);
         final monthState = buildMonthState(dashboard);
 
-        final activeDebts = getActiveDebts(debts);
-        final targetDebt = suggestedTargetDebt(activeDebts);
+        final targetDebt = monthlyPlan.focusDebt;
         final targetDebtPayment =
         targetDebt != null ? estimatedMonthlyPayment(targetDebt) : 0.0;
         final targetDebtMonths =
@@ -394,6 +400,13 @@ class _DashboardPageState extends State<DashboardPage> {
                 remainingAmount: dashboard.remainingObligationTotal,
                 pendingIncome: pendingIncome,
               ),
+              const SizedBox(height: 24),
+              AppSectionHeader(
+                title: 'Plan del mes',
+                subtitle: 'Qué cubrir primero, qué esperar y qué puedes pausar',
+              ),
+              const SizedBox(height: 12),
+              _MonthlyPlanCard(plan: monthlyPlan),
               const SizedBox(height: 24),
               AppSectionHeader(
                 title: 'Lo urgente',
@@ -682,6 +695,358 @@ class _HeroMiniStat extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MonthlyPlanCard extends StatelessWidget {
+  final MonthlyPlan plan;
+
+  const _MonthlyPlanCard({
+    required this.plan,
+  });
+
+  Color _pressureColor() {
+    switch (plan.pressureLevel) {
+      case 'critical':
+        return AppTokens.danger;
+      case 'tight':
+        return AppTokens.warning;
+      case 'stable':
+        return AppTokens.info;
+      case 'surplus':
+        return AppTokens.success;
+      default:
+        return AppTokens.ink500;
+    }
+  }
+
+  String _pressureLabel() {
+    switch (plan.pressureLevel) {
+      case 'critical':
+        return 'Crítico';
+      case 'tight':
+        return 'Justo';
+      case 'stable':
+        return 'Estable';
+      case 'surplus':
+        return 'Con margen';
+      default:
+        return 'Normal';
+    }
+  }
+
+  String _summaryText() {
+    switch (plan.pressureLevel) {
+      case 'critical':
+        return 'Con lo ya recibido no cubres lo pendiente. Prioriza solo lo crítico.';
+      case 'tight':
+        return 'El mes puede cerrar ajustado. Cubre lo esencial y evita adelantos.';
+      case 'stable':
+        return 'Tu mes está controlado, pero con poco margen para desviarte.';
+      case 'surplus':
+        return plan.focusDebt != null
+            ? 'Si entra todo lo esperado, podrías adelantar ${plan.focusDebt!.name}.'
+            : 'Si entra todo lo esperado, tendrás margen positivo.';
+      default:
+        return 'Revisa tus prioridades del mes.';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _summaryText(),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final metricWidth =
+              constraints.maxWidth >= 720
+                  ? (constraints.maxWidth - 12) / 2
+                  : constraints.maxWidth;
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: metricWidth,
+                    child: _PlanMetric(
+                      icon: Icons.account_balance_wallet_outlined,
+                      accent: AppTokens.info,
+                      label: 'Caja disponible hoy',
+                      value: AppFormatters.money(plan.availableNow),
+                    ),
+                  ),
+                  SizedBox(
+                    width: metricWidth,
+                    child: _PlanMetric(
+                      icon: Icons.auto_graph_outlined,
+                      accent: plan.projectedBalance < 0
+                          ? AppTokens.danger
+                          : AppTokens.success,
+                      label: 'Cierre proyectado',
+                      value: AppFormatters.money(plan.projectedBalance),
+                    ),
+                  ),
+                  SizedBox(
+                    width: metricWidth,
+                    child: _PlanMetric(
+                      icon: Icons.warning_amber_outlined,
+                      accent: _pressureColor(),
+                      label: 'Presión del mes',
+                      value: _pressureLabel(),
+                    ),
+                  ),
+                  SizedBox(
+                    width: metricWidth,
+                    child: _PlanMetric(
+                      icon: Icons.flag_outlined,
+                      accent: AppTokens.primary,
+                      label: 'Deuda foco',
+                      value: plan.focusDebt?.name ?? 'Sin foco',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 18),
+          _PlanBucketSection(
+            title: 'Paga sí o sí',
+            subtitle: 'Lo que no conviene dejar pasar',
+            color: AppTokens.danger,
+            items: plan.mustPay,
+            emptyText: 'No hay pagos críticos en este momento.',
+          ),
+          const SizedBox(height: 16),
+          _PlanBucketSection(
+            title: 'Paga si entra extra',
+            subtitle: 'Lo que puedes cubrir si mejora la caja',
+            color: AppTokens.warning,
+            items: plan.payIfExtraIncome,
+            emptyText: 'No hay pagos secundarios pendientes.',
+          ),
+          const SizedBox(height: 16),
+          _PlanBucketSection(
+            title: 'Pausa o negocia',
+            subtitle: 'Lo que puedes reducir o postergar',
+            color: AppTokens.info,
+            items: plan.canPause,
+            emptyText: 'No hay elementos pausables detectados.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanMetric extends StatelessWidget {
+  final IconData icon;
+  final Color accent;
+  final String label;
+  final String value;
+
+  const _PlanMetric({
+    required this.icon,
+    required this.accent,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+        border: Border.all(
+          color: Theme.of(context).dividerColor,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              icon,
+              color: accent,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTokens.ink500,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanBucketSection extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Color color;
+  final List<Map<String, dynamic>> items;
+  final String emptyText;
+
+  const _PlanBucketSection({
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.items,
+    required this.emptyText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final previewItems = items.take(3).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+        border: Border.all(
+          color: Theme.of(context).dividerColor,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AppStatusChip(
+                label: title,
+                color: color,
+                icon: Icons.flag_outlined,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '${items.length}',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: AppTokens.ink500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTokens.ink500,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (previewItems.isEmpty)
+            Text(
+              emptyText,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTokens.ink500,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else
+            ...previewItems.map(
+                  (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _PlanItemRow(item: item),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanItemRow extends StatelessWidget {
+  final Map<String, dynamic> item;
+
+  const _PlanItemRow({
+    required this.item,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = item['title']?.toString() ?? 'Obligación';
+    final dueDate = AppFormatters.date(item['due_date']);
+    final amount = AppFormatters.money(
+      (item['amount_due'] as num?) ?? 0,
+      item['currency']?.toString() ?? 'PEN',
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.chevron_right,
+          size: 18,
+          color: AppTokens.ink500,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppTokens.ink900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Vence $dueDate',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTokens.ink500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          amount,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 }
