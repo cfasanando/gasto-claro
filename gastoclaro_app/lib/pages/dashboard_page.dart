@@ -4,10 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../models/debt.dart';
 import '../models/monthly_dashboard.dart';
+import '../models/monthly_plan.dart';
 import '../services/dashboard_service.dart';
+import '../services/debt_focus_service.dart';
 import '../services/debt_service.dart';
+import '../services/monthly_plan_service.dart';
 import '../services/payment_obligation_service.dart';
 import '../services/payment_record_service.dart';
+import '../services/urgent_item_preference_service.dart';
 import '../theme/app_tokens.dart';
 import '../utils/app_formatters.dart';
 import '../widgets/app_empty_state.dart';
@@ -15,9 +19,6 @@ import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
 import '../widgets/app_surface_card.dart';
 import '../widgets/payment_record_sheet.dart';
-import '../models/monthly_plan.dart';
-import '../services/monthly_plan_service.dart';
-import '../services/debt_focus_service.dart';
 
 class DashboardPage extends StatefulWidget {
   final int year;
@@ -41,6 +42,7 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   late Future<_DashboardBundle> futureDashboard;
+
   final DashboardService dashboardService = DashboardService();
   final DebtService debtService = DebtService();
   final MonthlyPlanService monthlyPlanService = MonthlyPlanService();
@@ -48,7 +50,10 @@ class _DashboardPageState extends State<DashboardPage> {
   final PaymentObligationService paymentObligationService =
   PaymentObligationService();
   final PaymentRecordService paymentRecordService = PaymentRecordService();
+  final UrgentItemPreferenceService urgentItemPreferenceService =
+  UrgentItemPreferenceService();
 
+  Map<String, String> manualUrgency = {};
   int? manualFocusDebtId;
   bool isSyncing = false;
 
@@ -57,6 +62,7 @@ class _DashboardPageState extends State<DashboardPage> {
     super.initState();
     loadDashboard();
     loadManualFocusDebt();
+    loadManualUrgency();
   }
 
   @override
@@ -70,6 +76,32 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void loadDashboard() {
     futureDashboard = _loadDashboardData();
+  }
+
+  Future<_DashboardBundle> _loadDashboardData() async {
+    final dashboard = await dashboardService.getMonthlyDashboard(
+      year: widget.year,
+      month: widget.month,
+    );
+
+    List<Debt> debts = [];
+
+    try {
+      debts = await debtService.getDebts();
+    } catch (_) {
+      debts = [];
+    }
+
+    return _DashboardBundle(
+      dashboard: dashboard,
+      debts: debts,
+    );
+  }
+
+  Future<void> reload() async {
+    setState(() {
+      loadDashboard();
+    });
   }
 
   Future<void> loadManualFocusDebt() async {
@@ -93,8 +125,7 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     for (final debt in debts) {
-      if (
-      debt.id == manualFocusDebtId &&
+      if (debt.id == manualFocusDebtId &&
           debt.status == 'active' &&
           debt.currentBalance > 0) {
         return debt;
@@ -253,30 +284,293 @@ class _DashboardPageState extends State<DashboardPage> {
     await saveManualFocusDebt(selectedDebtId);
   }
 
-  Future<_DashboardBundle> _loadDashboardData() async {
-    final dashboard = await dashboardService.getMonthlyDashboard(
-      year: widget.year,
-      month: widget.month,
-    );
+  Future<void> loadManualUrgency() async {
+    final data = await urgentItemPreferenceService.getAll();
 
-    List<Debt> debts = [];
-
-    try {
-      debts = await debtService.getDebts();
-    } catch (_) {
-      debts = [];
+    if (!mounted) {
+      return;
     }
 
-    return _DashboardBundle(
-      dashboard: dashboard,
-      debts: debts,
+    setState(() {
+      manualUrgency = data;
+    });
+  }
+
+  String urgencyItemKey(Map<String, dynamic> item) {
+    final idPart =
+        item['id']?.toString() ?? item['title']?.toString() ?? 'item';
+    final datePart = item['due_date']?.toString() ?? '';
+
+    return '$idPart-$datePart';
+  }
+
+  DateTime? parseUrgentDate(dynamic raw) {
+    final value = raw?.toString();
+
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    try {
+      return DateTime.parse(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  int statusPriority(String status) {
+    switch (status) {
+      case 'overdue':
+        return 0;
+      case 'partial':
+        return 1;
+      case 'pending':
+        return 2;
+      default:
+        return 3;
+    }
+  }
+
+  int bucketPriority(String bucket) {
+    switch (bucket) {
+      case 'must_pay':
+        return 0;
+      case 'extra':
+        return 10;
+      case 'pause':
+        return 20;
+      default:
+        return 30;
+    }
+  }
+
+  int urgentItemScore(Map<String, dynamic> item) {
+    final manualPriority = item['_manual_priority']?.toString();
+
+    if (manualPriority == 'critical') {
+      return 0;
+    }
+
+    if (manualPriority == 'postponable') {
+      return 999;
+    }
+
+    final status = (item['status']?.toString() ?? '').toLowerCase();
+    final bucket = item['_plan_bucket']?.toString() ?? '';
+
+    return statusPriority(status) * 10 + bucketPriority(bucket);
+  }
+
+  List<Map<String, dynamic>> buildUrgentItems(MonthlyPlan plan) {
+    final items = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    void append(List<Map<String, dynamic>> source, String bucket) {
+      for (final raw in source) {
+        final item = Map<String, dynamic>.from(raw);
+        final key = urgencyItemKey(item);
+
+        if (!seen.add(key)) {
+          continue;
+        }
+
+        item['_manual_priority'] = manualUrgency[key];
+        item['_plan_bucket'] = bucket;
+        items.add(item);
+      }
+    }
+
+    append(plan.mustPay, 'must_pay');
+    append(plan.payIfExtraIncome, 'extra');
+    append(plan.canPause, 'pause');
+
+    items.sort((a, b) {
+      final scoreCompare = urgentItemScore(a).compareTo(urgentItemScore(b));
+
+      if (scoreCompare != 0) {
+        return scoreCompare;
+      }
+
+      final aDate = parseUrgentDate(a['due_date']);
+      final bDate = parseUrgentDate(b['due_date']);
+
+      if (aDate != null && bDate != null) {
+        final dateCompare = aDate.compareTo(bDate);
+
+        if (dateCompare != 0) {
+          return dateCompare;
+        }
+      }
+
+      final aAmount = ((a['amount_due'] as num?) ?? 0).toDouble();
+      final bAmount = ((b['amount_due'] as num?) ?? 0).toDouble();
+
+      return bAmount.compareTo(aAmount);
+    });
+
+    final visibleItems = items
+        .where((item) => item['_manual_priority']?.toString() != 'postponable')
+        .toList();
+
+    return visibleItems.take(3).toList();
+  }
+
+  Future<void> markUrgentItemCritical(Map<String, dynamic> item) async {
+    final key = urgencyItemKey(item);
+    await urgentItemPreferenceService.setPriority(key, 'critical');
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      manualUrgency[key] = 'critical';
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Marcado como crítico'),
+      ),
     );
   }
 
-  Future<void> reload() async {
+  Future<void> markUrgentItemPostponable(Map<String, dynamic> item) async {
+    final key = urgencyItemKey(item);
+    await urgentItemPreferenceService.setPriority(key, 'postponable');
+
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
-      loadDashboard();
+      manualUrgency[key] = 'postponable';
     });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Marcado como posponible'),
+      ),
+    );
+  }
+
+  Future<void> clearUrgentItemPriority(Map<String, dynamic> item) async {
+    final key = urgencyItemKey(item);
+    await urgentItemPreferenceService.clearPriority(key);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      manualUrgency.remove(key);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Prioridad manual eliminada'),
+      ),
+    );
+  }
+
+  Future<void> openUrgencyPriorityMenu(Map<String, dynamic> item) async {
+    final selectedAction = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.priority_high_outlined),
+                title: const Text('Marcar como crítico'),
+                subtitle: const Text('Subir este item al bloque urgente'),
+                onTap: () => Navigator.of(context).pop('critical'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.watch_later_outlined),
+                title: const Text('Marcar como posponible'),
+                subtitle: const Text('Sacar este item del foco urgente'),
+                onTap: () => Navigator.of(context).pop('postponable'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.restart_alt_outlined),
+                title: const Text('Quitar prioridad manual'),
+                subtitle: const Text('Volver a la clasificación automática'),
+                onTap: () => Navigator.of(context).pop('clear'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    switch (selectedAction) {
+      case 'critical':
+        await markUrgentItemCritical(item);
+        break;
+      case 'postponable':
+        await markUrgentItemPostponable(item);
+        break;
+      case 'clear':
+        await clearUrgentItemPriority(item);
+        break;
+    }
+  }
+
+  _ExecutiveSummaryData buildExecutiveSummary({
+    required MonthlyPlan plan,
+    required List<Map<String, dynamic>> urgentItems,
+    required Debt? targetDebt,
+  }) {
+    final firstUrgentTitle = urgentItems.isNotEmpty
+        ? urgentItems.first['title']?.toString() ?? 'lo más urgente'
+        : null;
+
+    switch (plan.pressureLevel) {
+      case 'critical':
+        return _ExecutiveSummaryData(
+          title: 'Prioriza caja y vencimientos',
+          description: firstUrgentTitle != null
+              ? 'Empieza por $firstUrgentTitle. Este mes no conviene adelantar otros pagos.'
+              : plan.summary,
+          accent: AppTokens.danger,
+          icon: Icons.warning_amber_outlined,
+        );
+      case 'tight':
+        return _ExecutiveSummaryData(
+          title: 'Mes ajustado',
+          description: firstUrgentTitle != null
+              ? 'Primero cubre $firstUrgentTitle y mantén controlado el resto.'
+              : plan.summary,
+          accent: AppTokens.warning,
+          icon: Icons.tune_outlined,
+        );
+      case 'stable':
+        return _ExecutiveSummaryData(
+          title: 'Mes estable',
+          description: targetDebt != null
+              ? 'Cubre lo pendiente y luego enfócate en ${targetDebt.name}.'
+              : plan.summary,
+          accent: AppTokens.info,
+          icon: Icons.check_circle_outline,
+        );
+      case 'surplus':
+        return _ExecutiveSummaryData(
+          title: 'Tienes margen',
+          description: targetDebt != null
+              ? 'Después de cubrir el mes, puedes adelantar ${targetDebt.name}.'
+              : plan.summary,
+          accent: AppTokens.success,
+          icon: Icons.trending_up,
+        );
+      default:
+        return _ExecutiveSummaryData(
+          title: 'Resumen del mes',
+          description: plan.summary,
+          accent: AppTokens.info,
+          icon: Icons.insights_outlined,
+        );
+    }
   }
 
   Future<void> syncMonthlyObligations() async {
@@ -335,7 +629,6 @@ class _DashboardPageState extends State<DashboardPage> {
           content: Text('No se pudo identificar la obligación'),
         ),
       );
-
       return;
     }
 
@@ -384,47 +677,10 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  List<Map<String, dynamic>> buildUrgentItems(MonthlyDashboard dashboard) {
-    final items = <Map<String, dynamic>>[];
-    final seen = <String>{};
-
-    void append(List<dynamic> rawItems) {
-      for (final raw in rawItems) {
-        final item = Map<String, dynamic>.from(raw as Map);
-        final key =
-            '${item['id'] ?? item['title']}-${item['due_date']}-${item['status']}';
-
-        if (!seen.add(key)) {
-          continue;
-        }
-
-        items.add(item);
-
-        if (items.length >= 3) {
-          break;
-        }
-      }
-    }
-
-    append(dashboard.attentionItems);
-
-    if (items.length < 3) {
-      append(dashboard.pendingItems);
-    }
-
-    return items.take(3).toList();
-  }
-
   List<Map<String, dynamic>> buildRecentPaidItems(MonthlyDashboard dashboard) {
     return dashboard.paidItems
         .take(3)
         .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-  }
-
-  List<Debt> getActiveDebts(List<Debt> debts) {
-    return debts
-        .where((item) => item.status == 'active' && item.currentBalance > 0)
         .toList();
   }
 
@@ -467,33 +723,14 @@ class _DashboardPageState extends State<DashboardPage> {
     return normalizedPaid / original;
   }
 
-  Debt? suggestedTargetDebt(List<Debt> debts) {
-    final activeDebts = getActiveDebts(debts);
-
-    if (activeDebts.isEmpty) {
-      return null;
-    }
-
-    activeDebts.sort((a, b) {
-      final balanceCompare = a.currentBalance.compareTo(b.currentBalance);
-
-      if (balanceCompare != 0) {
-        return balanceCompare;
-      }
-
-      return estimatedMonthlyPayment(b).compareTo(estimatedMonthlyPayment(a));
-    });
-
-    return activeDebts.first;
-  }
-
   _MonthStateData buildMonthState(MonthlyDashboard dashboard) {
     final double pendingIncome = math.max(
       0.0,
       dashboard.expectedIncomeTotal - dashboard.receivedIncomeTotal,
     );
 
-    if (dashboard.remainingObligationTotal <= 0 && dashboard.actualBalance >= 0) {
+    if (dashboard.remainingObligationTotal <= 0 &&
+        dashboard.actualBalance >= 0) {
       return const _MonthStateData(
         label: 'Mes en control',
         description: 'Tu mes está cubierto y no hay obligaciones pendientes.',
@@ -504,7 +741,8 @@ class _DashboardPageState extends State<DashboardPage> {
     if (dashboard.actualBalance < 0) {
       return const _MonthStateData(
         label: 'Mes en presión',
-        description: 'Lo pendiente supera tu caja actual. Prioriza pagos críticos.',
+        description:
+        'Lo pendiente supera tu caja actual. Prioriza pagos críticos.',
         accent: AppTokens.danger,
       );
     }
@@ -551,20 +789,29 @@ class _DashboardPageState extends State<DashboardPage> {
         final bundle = snapshot.data!;
         final dashboard = bundle.dashboard;
         final debts = bundle.debts;
+
         final monthlyPlan = monthlyPlanService.buildPlan(
           dashboard: dashboard,
           debts: debts,
         );
-        final urgentItems = buildUrgentItems(dashboard);
-        final recentPaidItems = buildRecentPaidItems(dashboard);
-        final monthState = buildMonthState(dashboard);
 
         final suggestedDebt = monthlyPlan.focusDebt;
         final targetDebt = resolveDisplayedTargetDebt(
           debts: debts,
           suggestedDebt: suggestedDebt,
         );
-        final isManualFocus = targetDebt != null && manualFocusDebtId == targetDebt.id;
+        final isManualFocus =
+            targetDebt != null && manualFocusDebtId == targetDebt.id;
+
+        final urgentItems = buildUrgentItems(monthlyPlan);
+        final recentPaidItems = buildRecentPaidItems(dashboard);
+        final monthState = buildMonthState(dashboard);
+
+        final executiveSummary = buildExecutiveSummary(
+          plan: monthlyPlan,
+          urgentItems: urgentItems,
+          targetDebt: targetDebt,
+        );
 
         final targetDebtPayment =
         targetDebt != null ? estimatedMonthlyPayment(targetDebt) : 0.0;
@@ -592,9 +839,12 @@ class _DashboardPageState extends State<DashboardPage> {
                 pendingIncome: pendingIncome,
               ),
               const SizedBox(height: 24),
+              _ExecutiveSummaryCard(data: executiveSummary),
+              const SizedBox(height: 24),
               AppSectionHeader(
                 title: 'Plan del mes',
-                subtitle: 'Qué cubrir primero, qué esperar y qué puedes pausar',
+                subtitle:
+                'Qué cubrir primero, qué puedes pausar y dónde está tu foco',
               ),
               const SizedBox(height: 12),
               _MonthlyPlanCard(
@@ -623,6 +873,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 _UrgentAgendaCard(
                   items: urgentItems,
                   onPay: registerPaymentFromDashboard,
+                  onManagePriority: openUrgencyPriorityMenu,
                 ),
               const SizedBox(height: 24),
               AppSectionHeader(
@@ -637,7 +888,8 @@ class _DashboardPageState extends State<DashboardPage> {
                 progressRatioValue: targetDebtProgress,
                 isManualFocus: isManualFocus,
                 onChangeFocus: () => openDebtFocusPicker(debts),
-                onUseAutomaticFocus: isManualFocus ? clearManualFocusDebt : null,
+                onUseAutomaticFocus:
+                isManualFocus ? clearManualFocusDebt : null,
               ),
               const SizedBox(height: 24),
               AppSectionHeader(
@@ -667,7 +919,8 @@ class _DashboardPageState extends State<DashboardPage> {
                 const AppEmptyState(
                   icon: Icons.check_circle_outline,
                   title: 'Aún no hay pagos registrados',
-                  subtitle: 'Cuando registres pagos recientes aparecerán aquí.',
+                  subtitle:
+                  'Cuando registres pagos recientes aparecerán aquí.',
                 )
               else
                 _RecentActivityCard(
@@ -845,6 +1098,74 @@ class _MonthStateCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExecutiveSummaryData {
+  final String title;
+  final String description;
+  final Color accent;
+  final IconData icon;
+
+  const _ExecutiveSummaryData({
+    required this.title,
+    required this.description,
+    required this.accent,
+    required this.icon,
+  });
+}
+
+class _ExecutiveSummaryCard extends StatelessWidget {
+  final _ExecutiveSummaryData data;
+
+  const _ExecutiveSummaryCard({
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: data.accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(
+              data.icon,
+              color: data.accent,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data.title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  data.description,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTokens.ink700,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1252,10 +1573,12 @@ class _PlanItemRow extends StatelessWidget {
 class _UrgentAgendaCard extends StatelessWidget {
   final List<Map<String, dynamic>> items;
   final Future<void> Function(Map<String, dynamic>) onPay;
+  final Future<void> Function(Map<String, dynamic>) onManagePriority;
 
   const _UrgentAgendaCard({
     required this.items,
     required this.onPay,
+    required this.onManagePriority,
   });
 
   Color _statusColor(String status) {
@@ -1304,6 +1627,7 @@ class _UrgentAgendaCard extends StatelessWidget {
                 items[index]['status']?.toString() ?? '',
               ),
               onPay: () => onPay(items[index]),
+              onManagePriority: () => onManagePriority(items[index]),
             ),
             if (index < items.length - 1) ...[
               const SizedBox(height: 14),
@@ -1325,18 +1649,21 @@ class _UrgentAgendaRow extends StatelessWidget {
   final Color statusColorValue;
   final IconData statusIconValue;
   final VoidCallback onPay;
+  final VoidCallback onManagePriority;
 
   const _UrgentAgendaRow({
     required this.item,
     required this.statusColorValue,
     required this.statusIconValue,
     required this.onPay,
+    required this.onManagePriority,
   });
 
   @override
   Widget build(BuildContext context) {
     final status = item['status']?.toString() ?? '';
     final canPay = status != 'paid' && status != 'cancelled';
+    final manualPriority = item['_manual_priority']?.toString();
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1354,13 +1681,25 @@ class _UrgentAgendaRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                item['title']?.toString() ?? '',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      item['title']?.toString() ?? '',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: onManagePriority,
+                    icon: const Icon(Icons.more_horiz),
+                    tooltip: 'Prioridad',
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 'Vence ${AppFormatters.date(item['due_date'])}',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -1368,10 +1707,28 @@ class _UrgentAgendaRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              AppStatusChip(
-                label: AppFormatters.obligationStatus(status),
-                color: statusColorValue,
-                icon: statusIconValue,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  AppStatusChip(
+                    label: AppFormatters.obligationStatus(status),
+                    color: statusColorValue,
+                    icon: statusIconValue,
+                  ),
+                  if (manualPriority == 'critical')
+                    AppStatusChip(
+                      label: 'Crítico manual',
+                      color: AppTokens.danger,
+                      icon: Icons.priority_high_outlined,
+                    ),
+                  if (manualPriority == 'postponable')
+                    AppStatusChip(
+                      label: 'Posponible',
+                      color: AppTokens.info,
+                      icon: Icons.watch_later_outlined,
+                    ),
+                ],
               ),
             ],
           ),
@@ -1430,7 +1787,8 @@ class _DebtFocusCard extends StatelessWidget {
       return const AppEmptyState(
         icon: Icons.flag_outlined,
         title: 'Aún no hay deuda objetivo',
-        subtitle: 'Cuando registres deudas activas, aquí aparecerá tu foco actual.',
+        subtitle:
+        'Cuando registres deudas activas, aquí aparecerá tu foco actual.',
       );
     }
 

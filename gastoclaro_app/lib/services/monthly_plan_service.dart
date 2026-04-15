@@ -9,13 +9,14 @@ class MonthlyPlanService {
   }) {
     final availableNow =
         dashboard.receivedIncomeTotal - dashboard.remainingObligationTotal;
+
     final projectedBalance =
         dashboard.expectedIncomeTotal - dashboard.remainingObligationTotal;
 
-    final pendingItems = [
+    final pendingItems = _dedupeItems([
       ...dashboard.attentionItems.map((e) => Map<String, dynamic>.from(e)),
       ...dashboard.pendingItems.map((e) => Map<String, dynamic>.from(e)),
-    ];
+    ]);
 
     final mustPay = <Map<String, dynamic>>[];
     final payIfExtraIncome = <Map<String, dynamic>>[];
@@ -32,6 +33,10 @@ class MonthlyPlanService {
         payIfExtraIncome.add(item);
       }
     }
+
+    _sortBucket(mustPay);
+    _sortBucket(payIfExtraIncome);
+    _sortBucket(canPause);
 
     final focusDebt = resolveFocusDebt(debts);
 
@@ -59,6 +64,81 @@ class MonthlyPlanService {
     );
   }
 
+  List<Map<String, dynamic>> _dedupeItems(List<Map<String, dynamic>> items) {
+    final result = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    for (final item in items) {
+      final key =
+          '${item['id'] ?? item['title']}-${item['due_date']}-${item['status']}';
+
+      if (!seen.add(key)) {
+        continue;
+      }
+
+      result.add(item);
+    }
+
+    return result;
+  }
+
+  void _sortBucket(List<Map<String, dynamic>> items) {
+    items.sort((a, b) {
+      final aStatus = (a['status']?.toString() ?? '').toLowerCase();
+      final bStatus = (b['status']?.toString() ?? '').toLowerCase();
+
+      final statusCompare =
+      _statusPriority(aStatus).compareTo(_statusPriority(bStatus));
+
+      if (statusCompare != 0) {
+        return statusCompare;
+      }
+
+      final aDate = _parseDate(a['due_date']);
+      final bDate = _parseDate(b['due_date']);
+
+      if (aDate != null && bDate != null) {
+        final dateCompare = aDate.compareTo(bDate);
+
+        if (dateCompare != 0) {
+          return dateCompare;
+        }
+      }
+
+      final aAmount = ((a['amount_due'] as num?) ?? 0).toDouble();
+      final bAmount = ((b['amount_due'] as num?) ?? 0).toDouble();
+
+      return bAmount.compareTo(aAmount);
+    });
+  }
+
+  int _statusPriority(String status) {
+    switch (status) {
+      case 'overdue':
+        return 0;
+      case 'partial':
+        return 1;
+      case 'pending':
+        return 2;
+      default:
+        return 3;
+    }
+  }
+
+  DateTime? _parseDate(dynamic raw) {
+    final value = raw?.toString();
+
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    try {
+      return DateTime.parse(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
   _PlanBucket classifyObligation(Map<String, dynamic> item) {
     final title = (item['title']?.toString() ?? '').toLowerCase();
     final status = (item['status']?.toString() ?? '').toLowerCase();
@@ -77,6 +157,7 @@ class MonthlyPlanService {
       'scotiabank',
       'utp',
       'zegel',
+      'universidad',
     ];
 
     const pauseKeywords = [
@@ -86,12 +167,14 @@ class MonthlyPlanService {
 
     final isCritical =
     criticalKeywords.any((keyword) => title.contains(keyword));
+
     if (isCritical) {
       return _PlanBucket.mustPay;
     }
 
     final isPausable =
     pauseKeywords.any((keyword) => title.contains(keyword));
+
     if (isPausable) {
       return _PlanBucket.canPause;
     }
