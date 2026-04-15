@@ -1,13 +1,19 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
+import '../models/debt.dart';
 import '../models/monthly_dashboard.dart';
 import '../services/dashboard_service.dart';
+import '../services/debt_service.dart';
 import '../services/payment_obligation_service.dart';
 import '../services/payment_record_service.dart';
+import '../theme/app_tokens.dart';
 import '../utils/app_formatters.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_status_chip.dart';
+import '../widgets/app_surface_card.dart';
 import '../widgets/payment_record_sheet.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -31,8 +37,9 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  late Future<MonthlyDashboard> futureDashboard;
+  late Future<_DashboardBundle> futureDashboard;
   final DashboardService dashboardService = DashboardService();
+  final DebtService debtService = DebtService();
   final PaymentObligationService paymentObligationService =
   PaymentObligationService();
   final PaymentRecordService paymentRecordService = PaymentRecordService();
@@ -55,9 +62,26 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void loadDashboard() {
-    futureDashboard = dashboardService.getMonthlyDashboard(
+    futureDashboard = _loadDashboardData();
+  }
+
+  Future<_DashboardBundle> _loadDashboardData() async {
+    final dashboard = await dashboardService.getMonthlyDashboard(
       year: widget.year,
       month: widget.month,
+    );
+
+    List<Debt> debts = [];
+
+    try {
+      debts = await debtService.getDebts();
+    } catch (_) {
+      debts = [];
+    }
+
+    return _DashboardBundle(
+      dashboard: dashboard,
+      debts: debts,
     );
   }
 
@@ -81,7 +105,6 @@ class _DashboardPageState extends State<DashboardPage> {
         year: widget.year,
         month: widget.month,
       );
-
       await reload();
 
       if (!mounted) {
@@ -173,9 +196,149 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  List<Map<String, dynamic>> buildUrgentItems(MonthlyDashboard dashboard) {
+    final items = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    void append(List<dynamic> rawItems) {
+      for (final raw in rawItems) {
+        final item = Map<String, dynamic>.from(raw as Map);
+        final key =
+            '${item['id'] ?? item['title']}-${item['due_date']}-${item['status']}';
+
+        if (!seen.add(key)) {
+          continue;
+        }
+
+        items.add(item);
+
+        if (items.length >= 3) {
+          break;
+        }
+      }
+    }
+
+    append(dashboard.attentionItems);
+
+    if (items.length < 3) {
+      append(dashboard.pendingItems);
+    }
+
+    return items.take(3).toList();
+  }
+
+  List<Map<String, dynamic>> buildRecentPaidItems(MonthlyDashboard dashboard) {
+    return dashboard.paidItems
+        .take(3)
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  List<Debt> getActiveDebts(List<Debt> debts) {
+    return debts
+        .where((item) => item.status == 'active' && item.currentBalance > 0)
+        .toList();
+  }
+
+  double estimatedMonthlyPayment(Debt debt) {
+    if (debt.monthlyDueAmount != null && debt.monthlyDueAmount! > 0) {
+      return debt.monthlyDueAmount!;
+    }
+
+    if (debt.minimumPayment != null && debt.minimumPayment! > 0) {
+      return debt.minimumPayment!;
+    }
+
+    return 0;
+  }
+
+  int? estimatedMonthsLeft(Debt debt) {
+    final payment = estimatedMonthlyPayment(debt);
+
+    if (debt.status != 'active' || debt.currentBalance <= 0 || payment <= 0) {
+      return null;
+    }
+
+    return math.max(1, (debt.currentBalance / payment).ceil());
+  }
+
+  double? progressRatio(Debt debt) {
+    final original = debt.originalAmount;
+
+    if (original == null || original <= 0) {
+      return null;
+    }
+
+    final paidAmount = original - debt.currentBalance;
+    final normalizedPaid = paidAmount < 0
+        ? 0.0
+        : paidAmount > original
+        ? original
+        : paidAmount;
+
+    return normalizedPaid / original;
+  }
+
+  Debt? suggestedTargetDebt(List<Debt> debts) {
+    final activeDebts = getActiveDebts(debts);
+
+    if (activeDebts.isEmpty) {
+      return null;
+    }
+
+    activeDebts.sort((a, b) {
+      final balanceCompare = a.currentBalance.compareTo(b.currentBalance);
+
+      if (balanceCompare != 0) {
+        return balanceCompare;
+      }
+
+      return estimatedMonthlyPayment(b).compareTo(estimatedMonthlyPayment(a));
+    });
+
+    return activeDebts.first;
+  }
+
+  _MonthStateData buildMonthState(MonthlyDashboard dashboard) {
+    final double pendingIncome = math.max(
+      0.0,
+      dashboard.expectedIncomeTotal - dashboard.receivedIncomeTotal,
+    );
+
+    if (dashboard.remainingObligationTotal <= 0 && dashboard.actualBalance >= 0) {
+      return const _MonthStateData(
+        label: 'Mes en control',
+        description: 'Tu mes está cubierto y no hay obligaciones pendientes.',
+        accent: AppTokens.success,
+      );
+    }
+
+    if (dashboard.actualBalance < 0) {
+      return const _MonthStateData(
+        label: 'Mes en presión',
+        description: 'Lo pendiente supera tu caja actual. Prioriza pagos críticos.',
+        accent: AppTokens.danger,
+      );
+    }
+
+    if (pendingIncome > 0 || dashboard.remainingObligationTotal > 0) {
+      return const _MonthStateData(
+        label: 'Mes ajustado',
+        description: 'Todavía hay movimientos por recibir o cubrir este mes.',
+        accent: AppTokens.warning,
+      );
+    }
+
+    return const _MonthStateData(
+      label: 'Mes activo',
+      description: 'Tu mes sigue en movimiento, pero sin alertas graves.',
+      accent: AppTokens.info,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<MonthlyDashboard>(
+    return FutureBuilder<_DashboardBundle>(
       future: futureDashboard,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -197,36 +360,110 @@ class _DashboardPageState extends State<DashboardPage> {
           );
         }
 
-        final dashboard = snapshot.data!;
-        final width = MediaQuery.of(context).size.width;
-        final summaryColumns = width >= 1100
-            ? 3
-            : width >= 720
-            ? 2
-            : width >= 430
-            ? 2
-            : 1;
+        final bundle = snapshot.data!;
+        final dashboard = bundle.dashboard;
+        final debts = bundle.debts;
+        final urgentItems = buildUrgentItems(dashboard);
+        final recentPaidItems = buildRecentPaidItems(dashboard);
+        final monthState = buildMonthState(dashboard);
 
-        final summaryCardHeight = width >= 1100
-            ? 158.0
-            : width >= 720
-            ? 148.0
-            : width >= 430
-            ? 136.0
-            : 122.0;
+        final activeDebts = getActiveDebts(debts);
+        final targetDebt = suggestedTargetDebt(activeDebts);
+        final targetDebtPayment =
+        targetDebt != null ? estimatedMonthlyPayment(targetDebt) : 0.0;
+        final targetDebtMonths =
+        targetDebt != null ? estimatedMonthsLeft(targetDebt) : null;
+        final targetDebtProgress =
+        targetDebt != null ? progressRatio(targetDebt) : null;
+
+        final double pendingIncome = math.max(
+          0.0,
+          dashboard.expectedIncomeTotal - dashboard.receivedIncomeTotal,
+        );
 
         return RefreshIndicator(
           onRefresh: reload,
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              _HeroBalanceCard(
+              _MonthStateCard(
                 monthLabel: AppFormatters.monthYear(widget.year, widget.month),
+                state: monthState,
                 actualBalance: dashboard.actualBalance,
+                receivedIncome: dashboard.receivedIncomeTotal,
                 remainingAmount: dashboard.remainingObligationTotal,
-                paidAmount: dashboard.paidTotal,
+                pendingIncome: pendingIncome,
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 24),
+              AppSectionHeader(
+                title: 'Lo urgente',
+                subtitle: 'Lo que conviene atender primero este mes',
+                action: widget.onOpenObligations == null
+                    ? null
+                    : TextButton(
+                  onPressed: widget.onOpenObligations,
+                  child: const Text('Ver obligaciones'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (urgentItems.isEmpty)
+                const AppEmptyState(
+                  icon: Icons.auto_awesome_outlined,
+                  title: 'No hay urgencias ahora',
+                  subtitle: 'Tus alertas del periodo están bajo control.',
+                )
+              else
+                _UrgentAgendaCard(
+                  items: urgentItems,
+                  onPay: registerPaymentFromDashboard,
+                ),
+              const SizedBox(height: 24),
+              AppSectionHeader(
+                title: 'Deuda objetivo',
+                subtitle: 'Tu foco actual para ir saliendo de la presión',
+              ),
+              const SizedBox(height: 12),
+              _DebtFocusCard(
+                debt: targetDebt,
+                estimatedMonthlyPaymentValue: targetDebtPayment,
+                estimatedMonthsLeftValue: targetDebtMonths,
+                progressRatioValue: targetDebtProgress,
+              ),
+              const SizedBox(height: 24),
+              AppSectionHeader(
+                title: 'Flujo del mes',
+                subtitle: 'Lectura compacta del dinero que entra y sale',
+              ),
+              const SizedBox(height: 12),
+              _FlowSummaryCard(
+                expectedIncome: dashboard.expectedIncomeTotal,
+                receivedIncome: dashboard.receivedIncomeTotal,
+                paidAmount: dashboard.paidTotal,
+                remainingAmount: dashboard.remainingObligationTotal,
+              ),
+              const SizedBox(height: 24),
+              AppSectionHeader(
+                title: 'Actividad reciente',
+                subtitle: 'Lo último que ya quedó registrado',
+                action: widget.onOpenPayments == null
+                    ? null
+                    : TextButton(
+                  onPressed: widget.onOpenPayments,
+                  child: const Text('Ver pagos'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (recentPaidItems.isEmpty)
+                const AppEmptyState(
+                  icon: Icons.check_circle_outline,
+                  title: 'Aún no hay pagos registrados',
+                  subtitle: 'Cuando registres pagos recientes aparecerán aquí.',
+                )
+              else
+                _RecentActivityCard(
+                  items: recentPaidItems,
+                ),
+              const SizedBox(height: 24),
               AppSectionHeader(
                 title: 'Acciones rápidas',
                 subtitle: 'Atajos principales para este mes',
@@ -266,132 +503,6 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              AppSectionHeader(
-                title: 'Resumen del mes',
-                subtitle: 'Vista rápida de lo más importante',
-              ),
-              const SizedBox(height: 12),
-              GridView(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: summaryColumns,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  mainAxisExtent: summaryCardHeight,
-                ),
-                children: [
-                  _MetricCard(
-                    title: 'Ingreso esperado',
-                    value: AppFormatters.money(dashboard.expectedIncomeTotal),
-                    icon: Icons.trending_up,
-                    accent: const Color(0xFF10B981),
-                  ),
-                  _MetricCard(
-                    title: 'Ingreso recibido',
-                    value: AppFormatters.money(dashboard.receivedIncomeTotal),
-                    icon: Icons.savings_outlined,
-                    accent: const Color(0xFF0EA5E9),
-                  ),
-                  _MetricCard(
-                    title: 'Obligaciones',
-                    value: AppFormatters.money(dashboard.obligationTotal),
-                    icon: Icons.account_balance_wallet_outlined,
-                    accent: const Color(0xFFF59E0B),
-                  ),
-                  _MetricCard(
-                    title: 'Pagado',
-                    value: AppFormatters.money(dashboard.paidTotal),
-                    icon: Icons.check_circle_outline,
-                    accent: const Color(0xFF22C55E),
-                  ),
-                  _MetricCard(
-                    title: 'Pendiente',
-                    value: AppFormatters.money(dashboard.remainingObligationTotal),
-                    icon: Icons.warning_amber_outlined,
-                    accent: dashboard.remainingObligationTotal > 0
-                        ? const Color(0xFFEF4444)
-                        : const Color(0xFF94A3B8),
-                  ),
-                  _MetricCard(
-                    title: 'Balance real',
-                    value: AppFormatters.money(dashboard.actualBalance),
-                    icon: Icons.show_chart_outlined,
-                    accent: dashboard.actualBalance < 0
-                        ? const Color(0xFFEF4444)
-                        : Theme.of(context).colorScheme.primary,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              AppSectionHeader(
-                title: 'Requieren atención',
-                subtitle: '${dashboard.attentionItems.length} elementos',
-              ),
-              const SizedBox(height: 12),
-              if (dashboard.attentionItems.isEmpty)
-                const AppEmptyState(
-                  icon: Icons.auto_awesome_outlined,
-                  title: 'Todo tranquilo por aquí',
-                  subtitle: 'No hay alertas activas en este momento.',
-                )
-              else
-                ...dashboard.attentionItems.map(
-                      (item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _DashboardObligationCard(
-                      item: item,
-                      showPayAction: true,
-                      onPay: () => registerPaymentFromDashboard(item),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 24),
-              AppSectionHeader(
-                title: 'Pendientes',
-                subtitle: '${dashboard.pendingItems.length} elementos',
-              ),
-              const SizedBox(height: 12),
-              if (dashboard.pendingItems.isEmpty)
-                const AppEmptyState(
-                  icon: Icons.inventory_2_outlined,
-                  title: 'No hay pendientes',
-                  subtitle: 'Tus obligaciones del periodo están al día.',
-                )
-              else
-                ...dashboard.pendingItems.map(
-                      (item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _DashboardObligationCard(
-                      item: item,
-                      showPayAction: true,
-                      onPay: () => registerPaymentFromDashboard(item),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 24),
-              AppSectionHeader(
-                title: 'Pagados',
-                subtitle: '${dashboard.paidItems.length} elementos',
-              ),
-              const SizedBox(height: 12),
-              if (dashboard.paidItems.isEmpty)
-                const AppEmptyState(
-                  icon: Icons.check_circle_outline,
-                  title: 'Aún no hay pagos registrados',
-                  subtitle: 'Cuando registres pagos aparecerán aquí.',
-                )
-              else
-                ...dashboard.paidItems.map(
-                      (item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _DashboardObligationCard(
-                      item: item,
-                      showPayAction: false,
-                    ),
-                  ),
-                ),
             ],
           ),
         );
@@ -400,23 +511,47 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-class _HeroBalanceCard extends StatelessWidget {
-  final String monthLabel;
-  final double actualBalance;
-  final double remainingAmount;
-  final double paidAmount;
+class _DashboardBundle {
+  final MonthlyDashboard dashboard;
+  final List<Debt> debts;
 
-  const _HeroBalanceCard({
+  const _DashboardBundle({
+    required this.dashboard,
+    required this.debts,
+  });
+}
+
+class _MonthStateData {
+  final String label;
+  final String description;
+  final Color accent;
+
+  const _MonthStateData({
+    required this.label,
+    required this.description,
+    required this.accent,
+  });
+}
+
+class _MonthStateCard extends StatelessWidget {
+  final String monthLabel;
+  final _MonthStateData state;
+  final double actualBalance;
+  final double receivedIncome;
+  final double remainingAmount;
+  final double pendingIncome;
+
+  const _MonthStateCard({
     required this.monthLabel,
+    required this.state,
     required this.actualBalance,
+    required this.receivedIncome,
     required this.remainingAmount,
-    required this.paidAmount,
+    required this.pendingIncome,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isNegative = actualBalance < 0;
-
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -449,9 +584,9 @@ class _HeroBalanceCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          const Text(
-            'Balance real',
-            style: TextStyle(
+          Text(
+            state.label,
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 15,
             ),
@@ -459,25 +594,33 @@ class _HeroBalanceCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             AppFormatters.money(actualBalance),
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 32,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.7,
               height: 1.0,
-              shadows: isNegative
-                  ? null
-                  : [
-                const Shadow(
-                  color: Colors.black26,
-                  blurRadius: 10,
-                ),
-              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            state.description,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+              height: 1.35,
             ),
           ),
           const SizedBox(height: 18),
           Row(
             children: [
+              Expanded(
+                child: _HeroMiniStat(
+                  label: 'Recibido',
+                  value: AppFormatters.money(receivedIncome),
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: _HeroMiniStat(
                   label: 'Pendiente',
@@ -487,8 +630,8 @@ class _HeroBalanceCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _HeroMiniStat(
-                  label: 'Pagado',
-                  value: AppFormatters.money(paidAmount),
+                  label: 'Por recibir',
+                  value: AppFormatters.money(pendingIncome),
                 ),
               ),
             ],
@@ -539,6 +682,643 @@ class _HeroMiniStat extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _UrgentAgendaCard extends StatelessWidget {
+  final List<Map<String, dynamic>> items;
+  final Future<void> Function(Map<String, dynamic>) onPay;
+
+  const _UrgentAgendaCard({
+    required this.items,
+    required this.onPay,
+  });
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'paid':
+        return Colors.green;
+      case 'partial':
+        return Colors.orange;
+      case 'overdue':
+        return Colors.red;
+      case 'pending':
+        return Colors.blueGrey;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'paid':
+        return Icons.check_circle_outline;
+      case 'partial':
+        return Icons.timelapse_outlined;
+      case 'overdue':
+        return Icons.warning_amber_outlined;
+      case 'pending':
+        return Icons.schedule_outlined;
+      default:
+        return Icons.info_outline;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        children: [
+          for (int index = 0; index < items.length; index++) ...[
+            _UrgentAgendaRow(
+              item: items[index],
+              statusColorValue: _statusColor(
+                items[index]['status']?.toString() ?? '',
+              ),
+              statusIconValue: _statusIcon(
+                items[index]['status']?.toString() ?? '',
+              ),
+              onPay: () => onPay(items[index]),
+            ),
+            if (index < items.length - 1) ...[
+              const SizedBox(height: 14),
+              Divider(
+                height: 1,
+                color: Theme.of(context).dividerColor,
+              ),
+              const SizedBox(height: 14),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _UrgentAgendaRow extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final Color statusColorValue;
+  final IconData statusIconValue;
+  final VoidCallback onPay;
+
+  const _UrgentAgendaRow({
+    required this.item,
+    required this.statusColorValue,
+    required this.statusIconValue,
+    required this.onPay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final status = item['status']?.toString() ?? '';
+    final canPay = status != 'paid' && status != 'cancelled';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 5,
+          height: 52,
+          decoration: BoxDecoration(
+            color: statusColorValue,
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item['title']?.toString() ?? '',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Vence ${AppFormatters.date(item['due_date'])}',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTokens.ink500,
+                ),
+              ),
+              const SizedBox(height: 10),
+              AppStatusChip(
+                label: AppFormatters.obligationStatus(status),
+                color: statusColorValue,
+                icon: statusIconValue,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              AppFormatters.money(
+                (item['amount_due'] as num?) ?? 0,
+                item['currency']?.toString() ?? 'PEN',
+              ),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+            if (canPay) ...[
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: onPay,
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Pagar'),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DebtFocusCard extends StatelessWidget {
+  final Debt? debt;
+  final double estimatedMonthlyPaymentValue;
+  final int? estimatedMonthsLeftValue;
+  final double? progressRatioValue;
+
+  const _DebtFocusCard({
+    required this.debt,
+    required this.estimatedMonthlyPaymentValue,
+    required this.estimatedMonthsLeftValue,
+    required this.progressRatioValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (debt == null) {
+      return const AppEmptyState(
+        icon: Icons.flag_outlined,
+        title: 'Aún no hay deuda foco',
+        subtitle: 'Cuando registres deudas activas, aquí verás tu objetivo actual.',
+      );
+    }
+
+    final subtitle = debt!.creditorName?.trim().isNotEmpty == true
+        ? debt!.creditorName!
+        : 'Deuda activa';
+
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: AppTokens.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+                ),
+                child: const Icon(
+                  Icons.flag_outlined,
+                  color: AppTokens.primary,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      debt!.name,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 21,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTokens.ink500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              AppStatusChip(
+                label: 'Objetivo sugerido',
+                color: AppTokens.primary,
+                icon: Icons.flag_outlined,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _DebtFocusMetric(
+                label: 'Saldo pendiente',
+                value: AppFormatters.money(debt!.currentBalance, debt!.currency),
+              ),
+              _DebtFocusMetric(
+                label: 'Pago base',
+                value: estimatedMonthlyPaymentValue > 0
+                    ? AppFormatters.money(
+                  estimatedMonthlyPaymentValue,
+                  debt!.currency,
+                )
+                    : 'Sin base',
+              ),
+              _DebtFocusMetric(
+                label: 'Vence',
+                value: debt!.dueDay != null ? 'Día ${debt!.dueDay}' : 'Sin día',
+              ),
+              _DebtFocusMetric(
+                label: 'Meses aprox',
+                value: estimatedMonthsLeftValue != null
+                    ? '$estimatedMonthsLeftValue'
+                    : 'Sin cálculo',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _DebtProgressInline(
+            debt: debt!,
+            progressRatioValue: progressRatioValue,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DebtFocusMetric extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DebtFocusMetric({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 148),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+        border: Border.all(
+          color: Theme.of(context).dividerColor,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTokens.ink500,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DebtProgressInline extends StatelessWidget {
+  final Debt debt;
+  final double? progressRatioValue;
+
+  const _DebtProgressInline({
+    required this.debt,
+    required this.progressRatioValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (progressRatioValue == null || debt.originalAmount == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTokens.surfaceMuted,
+          borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+          border: Border.all(
+            color: Theme.of(context).dividerColor,
+          ),
+        ),
+        child: Text(
+          'Aún no hay monto inicial suficiente para mostrar progreso real de capital.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppTokens.ink500,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+
+    final paidAmount = debt.originalAmount! - debt.currentBalance;
+    final safePaidAmount = paidAmount < 0
+        ? 0.0
+        : paidAmount > debt.originalAmount!
+        ? debt.originalAmount!
+        : paidAmount;
+    final percent = (progressRatioValue! * 100).round();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+        border: Border.all(
+          color: Theme.of(context).dividerColor,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Progreso de capital',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTokens.ink500,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progressRatioValue,
+              minHeight: 8,
+              backgroundColor: AppTokens.outline,
+              valueColor:
+              const AlwaysStoppedAnimation<Color>(AppTokens.primary),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '$percent% pagado · ${AppFormatters.money(safePaidAmount, debt.currency)} de ${AppFormatters.money(debt.originalAmount!, debt.currency)}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTokens.ink700,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FlowSummaryCard extends StatelessWidget {
+  final double expectedIncome;
+  final double receivedIncome;
+  final double paidAmount;
+  final double remainingAmount;
+
+  const _FlowSummaryCard({
+    required this.expectedIncome,
+    required this.receivedIncome,
+    required this.paidAmount,
+    required this.remainingAmount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(18),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final metricWidth = constraints.maxWidth >= 720
+              ? (constraints.maxWidth - 12) / 2
+              : constraints.maxWidth;
+
+          return Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              SizedBox(
+                width: metricWidth,
+                child: _FlowMetric(
+                  icon: Icons.trending_up,
+                  accent: AppTokens.success,
+                  label: 'Ingreso esperado',
+                  value: AppFormatters.money(expectedIncome),
+                ),
+              ),
+              SizedBox(
+                width: metricWidth,
+                child: _FlowMetric(
+                  icon: Icons.savings_outlined,
+                  accent: AppTokens.info,
+                  label: 'Ingreso recibido',
+                  value: AppFormatters.money(receivedIncome),
+                ),
+              ),
+              SizedBox(
+                width: metricWidth,
+                child: _FlowMetric(
+                  icon: Icons.check_circle_outline,
+                  accent: AppTokens.success,
+                  label: 'Pagado',
+                  value: AppFormatters.money(paidAmount),
+                ),
+              ),
+              SizedBox(
+                width: metricWidth,
+                child: _FlowMetric(
+                  icon: Icons.warning_amber_outlined,
+                  accent: remainingAmount > 0
+                      ? AppTokens.danger
+                      : const Color(0xFF94A3B8),
+                  label: 'Pendiente',
+                  value: AppFormatters.money(remainingAmount),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _FlowMetric extends StatelessWidget {
+  final IconData icon;
+  final Color accent;
+  final String label;
+  final String value;
+
+  const _FlowMetric({
+    required this.icon,
+    required this.accent,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+        border: Border.all(
+          color: Theme.of(context).dividerColor,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              icon,
+              color: accent,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTokens.ink500,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentActivityCard extends StatelessWidget {
+  final List<Map<String, dynamic>> items;
+
+  const _RecentActivityCard({
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        children: [
+          for (int index = 0; index < items.length; index++) ...[
+            _RecentActivityRow(item: items[index]),
+            if (index < items.length - 1) ...[
+              const SizedBox(height: 14),
+              Divider(
+                height: 1,
+                color: Theme.of(context).dividerColor,
+              ),
+              const SizedBox(height: 14),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentActivityRow extends StatelessWidget {
+  final Map<String, dynamic> item;
+
+  const _RecentActivityRow({
+    required this.item,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = item['title']?.toString() ?? 'Pago';
+    final dueDate = AppFormatters.date(item['due_date']);
+    final amount = AppFormatters.money(
+      (item['amount_due'] as num?) ?? 0,
+      item['currency']?.toString() ?? 'PEN',
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppTokens.success.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(
+            Icons.check_circle_outline,
+            color: AppTokens.success,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Registrado en el periodo · vence $dueDate',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTokens.ink500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          amount,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -601,187 +1381,6 @@ class _QuickActionCard extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color accent;
-
-  const _MetricCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: accent),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 24,
-                letterSpacing: -0.5,
-                height: 1.0,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DashboardObligationCard extends StatelessWidget {
-  final Map<String, dynamic> item;
-  final bool showPayAction;
-  final VoidCallback? onPay;
-
-  const _DashboardObligationCard({
-    required this.item,
-    required this.showPayAction,
-    this.onPay,
-  });
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'paid':
-        return Colors.green;
-      case 'partial':
-        return Colors.orange;
-      case 'overdue':
-        return Colors.red;
-      case 'pending':
-        return Colors.blueGrey;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  IconData _statusIcon(String status) {
-    switch (status) {
-      case 'paid':
-        return Icons.check_circle_outline;
-      case 'partial':
-        return Icons.timelapse_outlined;
-      case 'overdue':
-        return Icons.warning_amber_outlined;
-      case 'pending':
-        return Icons.schedule_outlined;
-      default:
-        return Icons.info_outline;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final status = item['status']?.toString() ?? '';
-    final color = _statusColor(status);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 5,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item['title']?.toString() ?? '',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Vence: ${AppFormatters.date(item['due_date'])}',
-                      ),
-                      const SizedBox(height: 10),
-                      AppStatusChip(
-                        label: AppFormatters.obligationStatus(status),
-                        color: color,
-                        icon: _statusIcon(status),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  AppFormatters.money(
-                    (item['amount_due'] as num?) ?? 0,
-                    item['currency']?.toString() ?? 'PEN',
-                  ),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
-            if (showPayAction) ...[
-              const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.icon(
-                  onPressed: onPay,
-                  icon: const Icon(Icons.payments_outlined),
-                  label: const Text('Registrar pago'),
-                ),
-              ),
-            ],
-          ],
         ),
       ),
     );
