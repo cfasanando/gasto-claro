@@ -17,6 +17,7 @@ import '../widgets/app_surface_card.dart';
 import '../widgets/payment_record_sheet.dart';
 import '../models/monthly_plan.dart';
 import '../services/monthly_plan_service.dart';
+import '../services/debt_focus_service.dart';
 
 class DashboardPage extends StatefulWidget {
   final int year;
@@ -43,16 +44,19 @@ class _DashboardPageState extends State<DashboardPage> {
   final DashboardService dashboardService = DashboardService();
   final DebtService debtService = DebtService();
   final MonthlyPlanService monthlyPlanService = MonthlyPlanService();
+  final DebtFocusService debtFocusService = DebtFocusService();
   final PaymentObligationService paymentObligationService =
   PaymentObligationService();
   final PaymentRecordService paymentRecordService = PaymentRecordService();
 
+  int? manualFocusDebtId;
   bool isSyncing = false;
 
   @override
   void initState() {
     super.initState();
     loadDashboard();
+    loadManualFocusDebt();
   }
 
   @override
@@ -66,6 +70,187 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void loadDashboard() {
     futureDashboard = _loadDashboardData();
+  }
+
+  Future<void> loadManualFocusDebt() async {
+    final savedDebtId = await debtFocusService.getFocusDebtId();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      manualFocusDebtId = savedDebtId;
+    });
+  }
+
+  Debt? resolveDisplayedTargetDebt({
+    required List<Debt> debts,
+    required Debt? suggestedDebt,
+  }) {
+    if (manualFocusDebtId == null) {
+      return suggestedDebt;
+    }
+
+    for (final debt in debts) {
+      if (
+      debt.id == manualFocusDebtId &&
+          debt.status == 'active' &&
+          debt.currentBalance > 0) {
+        return debt;
+      }
+    }
+
+    return suggestedDebt;
+  }
+
+  Future<void> saveManualFocusDebt(int debtId) async {
+    await debtFocusService.setFocusDebtId(debtId);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      manualFocusDebtId = debtId;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Deuda objetivo guardada'),
+      ),
+    );
+  }
+
+  Future<void> clearManualFocusDebt() async {
+    await debtFocusService.clearFocusDebtId();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      manualFocusDebtId = null;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Se volvió a la sugerencia automática'),
+      ),
+    );
+  }
+
+  Future<void> openDebtFocusPicker(List<Debt> debts) async {
+    final activeDebts = debts
+        .where((debt) => debt.status == 'active' && debt.currentBalance > 0)
+        .toList();
+
+    if (activeDebts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay deudas activas disponibles'),
+        ),
+      );
+      return;
+    }
+
+    final screenHeight = MediaQuery.of(context).size.height;
+    final estimatedHeight = 220.0 + (activeDebts.length * 72.0);
+    final sheetHeight = math.min(
+      screenHeight * 0.72,
+      math.max(estimatedHeight, 280.0),
+    );
+
+    final selectedDebtId = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+
+        return Material(
+          color: theme.scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(28),
+          ),
+          child: SizedBox(
+            height: sheetHeight,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 12, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Elegir deuda objetivo',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Cerrar',
+                      ),
+                    ],
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.auto_fix_high_outlined),
+                  title: const Text('Usar sugerencia automática'),
+                  subtitle: const Text(
+                    'Dejar que el panel elija la deuda foco',
+                  ),
+                  onTap: () => Navigator.of(context).pop(-1),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    itemCount: activeDebts.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final debt = activeDebts[index];
+                      final isSelected = manualFocusDebtId == debt.id;
+
+                      return ListTile(
+                        leading: Icon(
+                          isSelected
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_off,
+                        ),
+                        title: Text(debt.name),
+                        subtitle: Text(
+                          '${debt.creditorName?.trim().isNotEmpty == true ? debt.creditorName! : 'Deuda activa'} · ${AppFormatters.money(debt.currentBalance, debt.currency)}',
+                        ),
+                        trailing: debt.dueDay != null
+                            ? Text('Día ${debt.dueDay}')
+                            : null,
+                        onTap: () => Navigator.of(context).pop(debt.id),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selectedDebtId == null) {
+      return;
+    }
+
+    if (selectedDebtId == -1) {
+      await clearManualFocusDebt();
+      return;
+    }
+
+    await saveManualFocusDebt(selectedDebtId);
   }
 
   Future<_DashboardBundle> _loadDashboardData() async {
@@ -374,7 +559,13 @@ class _DashboardPageState extends State<DashboardPage> {
         final recentPaidItems = buildRecentPaidItems(dashboard);
         final monthState = buildMonthState(dashboard);
 
-        final targetDebt = monthlyPlan.focusDebt;
+        final suggestedDebt = monthlyPlan.focusDebt;
+        final targetDebt = resolveDisplayedTargetDebt(
+          debts: debts,
+          suggestedDebt: suggestedDebt,
+        );
+        final isManualFocus = targetDebt != null && manualFocusDebtId == targetDebt.id;
+
         final targetDebtPayment =
         targetDebt != null ? estimatedMonthlyPayment(targetDebt) : 0.0;
         final targetDebtMonths =
@@ -406,7 +597,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 subtitle: 'Qué cubrir primero, qué esperar y qué puedes pausar',
               ),
               const SizedBox(height: 12),
-              _MonthlyPlanCard(plan: monthlyPlan),
+              _MonthlyPlanCard(
+                plan: monthlyPlan,
+                displayFocusDebt: targetDebt,
+              ),
               const SizedBox(height: 24),
               AppSectionHeader(
                 title: 'Lo urgente',
@@ -441,6 +635,9 @@ class _DashboardPageState extends State<DashboardPage> {
                 estimatedMonthlyPaymentValue: targetDebtPayment,
                 estimatedMonthsLeftValue: targetDebtMonths,
                 progressRatioValue: targetDebtProgress,
+                isManualFocus: isManualFocus,
+                onChangeFocus: () => openDebtFocusPicker(debts),
+                onUseAutomaticFocus: isManualFocus ? clearManualFocusDebt : null,
               ),
               const SizedBox(height: 24),
               AppSectionHeader(
@@ -701,9 +898,11 @@ class _HeroMiniStat extends StatelessWidget {
 
 class _MonthlyPlanCard extends StatelessWidget {
   final MonthlyPlan plan;
+  final Debt? displayFocusDebt;
 
   const _MonthlyPlanCard({
     required this.plan,
+    required this.displayFocusDebt,
   });
 
   Color _pressureColor() {
@@ -726,7 +925,7 @@ class _MonthlyPlanCard extends StatelessWidget {
       case 'critical':
         return 'Crítico';
       case 'tight':
-        return 'Justo';
+        return 'Ajustado';
       case 'stable':
         return 'Estable';
       case 'surplus':
@@ -741,13 +940,13 @@ class _MonthlyPlanCard extends StatelessWidget {
       case 'critical':
         return 'Con lo ya recibido no cubres lo pendiente. Prioriza solo lo crítico.';
       case 'tight':
-        return 'El mes puede cerrar ajustado. Cubre lo esencial y evita adelantos.';
+        return 'El mes puede cerrar ajustado. Cubre lo esencial antes de adelantar otros pagos.';
       case 'stable':
-        return 'Tu mes está controlado, pero con poco margen para desviarte.';
+        return 'Tu mes está controlado, pero todavía con poco margen.';
       case 'surplus':
-        return plan.focusDebt != null
-            ? 'Si entra todo lo esperado, podrías adelantar ${plan.focusDebt!.name}.'
-            : 'Si entra todo lo esperado, tendrás margen positivo.';
+        return displayFocusDebt != null
+            ? 'Si entra todo lo esperado, podrías adelantar ${displayFocusDebt!.name}.'
+            : 'Si entra todo lo esperado, deberías cerrar el mes con margen positivo.';
       default:
         return 'Revisa tus prioridades del mes.';
     }
@@ -769,8 +968,7 @@ class _MonthlyPlanCard extends StatelessWidget {
           const SizedBox(height: 16),
           LayoutBuilder(
             builder: (context, constraints) {
-              final metricWidth =
-              constraints.maxWidth >= 720
+              final metricWidth = constraints.maxWidth >= 720
                   ? (constraints.maxWidth - 12) / 2
                   : constraints.maxWidth;
 
@@ -813,7 +1011,7 @@ class _MonthlyPlanCard extends StatelessWidget {
                       icon: Icons.flag_outlined,
                       accent: AppTokens.primary,
                       label: 'Deuda foco',
-                      value: plan.focusDebt?.name ?? 'Sin foco',
+                      value: displayFocusDebt?.name ?? 'Sin foco',
                     ),
                   ),
                 ],
@@ -831,7 +1029,7 @@ class _MonthlyPlanCard extends StatelessWidget {
           const SizedBox(height: 16),
           _PlanBucketSection(
             title: 'Paga si entra extra',
-            subtitle: 'Lo que puedes cubrir si mejora la caja',
+            subtitle: 'Lo que puedes cubrir si mejora tu caja',
             color: AppTokens.warning,
             items: plan.payIfExtraIncome,
             emptyText: 'No hay pagos secundarios pendientes.',
@@ -839,10 +1037,10 @@ class _MonthlyPlanCard extends StatelessWidget {
           const SizedBox(height: 16),
           _PlanBucketSection(
             title: 'Pausa o negocia',
-            subtitle: 'Lo que puedes reducir o postergar',
+            subtitle: 'Lo que puedes reducir, postergar o renegociar',
             color: AppTokens.info,
             items: plan.canPause,
-            emptyText: 'No hay elementos pausables detectados.',
+            emptyText: 'No se detectaron elementos pausables.',
           ),
         ],
       ),
@@ -1212,12 +1410,18 @@ class _DebtFocusCard extends StatelessWidget {
   final double estimatedMonthlyPaymentValue;
   final int? estimatedMonthsLeftValue;
   final double? progressRatioValue;
+  final bool isManualFocus;
+  final VoidCallback? onChangeFocus;
+  final VoidCallback? onUseAutomaticFocus;
 
   const _DebtFocusCard({
     required this.debt,
     required this.estimatedMonthlyPaymentValue,
     required this.estimatedMonthsLeftValue,
     required this.progressRatioValue,
+    required this.isManualFocus,
+    required this.onChangeFocus,
+    required this.onUseAutomaticFocus,
   });
 
   @override
@@ -1225,8 +1429,8 @@ class _DebtFocusCard extends StatelessWidget {
     if (debt == null) {
       return const AppEmptyState(
         icon: Icons.flag_outlined,
-        title: 'Aún no hay deuda foco',
-        subtitle: 'Cuando registres deudas activas, aquí verás tu objetivo actual.',
+        title: 'Aún no hay deuda objetivo',
+        subtitle: 'Cuando registres deudas activas, aquí aparecerá tu foco actual.',
       );
     }
 
@@ -1278,8 +1482,8 @@ class _DebtFocusCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               AppStatusChip(
-                label: 'Objetivo sugerido',
-                color: AppTokens.primary,
+                label: isManualFocus ? 'Foco manual' : 'Foco sugerido',
+                color: isManualFocus ? AppTokens.info : AppTokens.primary,
                 icon: Icons.flag_outlined,
               ),
             ],
@@ -1290,7 +1494,7 @@ class _DebtFocusCard extends StatelessWidget {
             runSpacing: 10,
             children: [
               _DebtFocusMetric(
-                label: 'Saldo pendiente',
+                label: 'Saldo actual',
                 value: AppFormatters.money(debt!.currentBalance, debt!.currency),
               ),
               _DebtFocusMetric(
@@ -1300,14 +1504,14 @@ class _DebtFocusCard extends StatelessWidget {
                   estimatedMonthlyPaymentValue,
                   debt!.currency,
                 )
-                    : 'Sin base',
+                    : 'Sin pago base',
               ),
               _DebtFocusMetric(
-                label: 'Vence',
+                label: 'Día de vencimiento',
                 value: debt!.dueDay != null ? 'Día ${debt!.dueDay}' : 'Sin día',
               ),
               _DebtFocusMetric(
-                label: 'Meses aprox',
+                label: 'Meses aprox.',
                 value: estimatedMonthsLeftValue != null
                     ? '$estimatedMonthsLeftValue'
                     : 'Sin cálculo',
@@ -1318,6 +1522,24 @@ class _DebtFocusCard extends StatelessWidget {
           _DebtProgressInline(
             debt: debt!,
             progressRatioValue: progressRatioValue,
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onChangeFocus,
+                icon: const Icon(Icons.tune_outlined),
+                label: const Text('Cambiar foco'),
+              ),
+              if (isManualFocus && onUseAutomaticFocus != null)
+                TextButton.icon(
+                  onPressed: onUseAutomaticFocus,
+                  icon: const Icon(Icons.auto_fix_high_outlined),
+                  label: const Text('Usar sugerencia automática'),
+                ),
+            ],
           ),
         ],
       ),
